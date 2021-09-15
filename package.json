@@ -2,6 +2,11 @@
     "name": "sir-vue",
     "version": "1.1.0",
     "description": "Customizable SSR rendering library for Vue and Express",
+    "homepage": "https://github.com/helllomatt/sir-vue",
+    "bugs": {
+        "url": "https://github.com/helllomatt/sir-vue/issues",
+        "email": "me@helllomatt.com"
+    },
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "scripts": {
@@ -15,7 +20,15 @@
         "ssr",
         "express"
     ],
-    "author": "helllomatt",
+    "author": {
+        "name": "helllomatt",
+        "email": "me@helllomatt.com",
+        "url": "https://helllomatt.com"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/helllomatt/sir-vue.git"
+    },
     "license": "TBD",
     "files": [
         "lib/**/*"

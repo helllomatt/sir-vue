@@ -5,15 +5,6 @@ import { Configuration as webpackConfiguration } from 'webpack';
 import { WebpackBuilder, WebpackBuilderOptions } from './webpack';
 import { renderToString } from '@vue/server-renderer';
 const jsToString = require('js-to-string');
-
-/**
- * TODO:
- *  - move out file/folder checking into separate class
- *  - documentation (readme)
- *  - license
- *  - example
- */
-
 export class Renderer {
     options: RendererOptions;
 
