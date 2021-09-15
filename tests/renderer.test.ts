@@ -76,7 +76,7 @@ describe('renderer', () => {
 
         expect(() => {
             renderer.options.projectDirectory = undefined;
-            renderer.resolveFolder('testers');
+            renderer.resolveFolder('testers', undefined);
         }).to.throw(Error, `Cannot resolve a folder no project directory has been set.`);
 
         renderer.options.projectDirectory = process.cwd();

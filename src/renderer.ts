@@ -219,7 +219,8 @@ export class Renderer {
             return path.resolve(folder);
         } else {
             if (!this.options) {
-                throw new Error(`Failed to resolve folder because no project directory has been set and this folder may not exist: ${folder}`);
+                console.log(this.options);
+                throw new Error(`Failed to resolve folder because no project directory has been set and this folder may not exist.`);
             }
 
             const pd = projectDirectory || this.options.projectDirectory || null;
