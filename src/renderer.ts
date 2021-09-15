@@ -218,8 +218,8 @@ export class Renderer {
         if (fs.existsSync(folder)) {
             return path.resolve(folder);
         } else {
-            if (!this.options) {
-                throw new Error(`Failed to resolve folder because no project directory has been set and this folder may not exist.`);
+            if (!this.options.projectDirectory) {
+                throw new Error(`Failed to resolve folder because no project directory has been set and this folder may not exist: ${folder}`);
             }
 
             const pd = projectDirectory || this.options.projectDirectory || null;
