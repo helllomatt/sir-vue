@@ -8,8 +8,6 @@ const jsToString = require('js-to-string');
 
 /**
  * TODO:
- *  - webpack
- *  - rendering
  *  - move out file/folder checking into separate class
  *  - documentation (readme)
  *  - license
