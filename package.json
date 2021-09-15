@@ -1,6 +1,6 @@
 {
     "name": "sir-vue",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Customizable SSR rendering library for Vue and Express",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
