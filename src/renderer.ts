@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as express from 'express';
-import { Configuration as webpackConfiguration } from 'webpack';
+import { Configuration as webpackConfiguration, webpack } from 'webpack';
 import { WebpackBuilder, WebpackBuilderOptions } from './webpack';
 import { renderToString } from '@vue/server-renderer';
 const jsToString = require('js-to-string');
@@ -135,7 +135,9 @@ export class Renderer {
      */
     async templateEngine(req: express.Request | null, res: express.Response | null, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride) {
         const compilationOptions: CompilationOptions = this.getCompilationOptions(options || { app: this.options.app } as ResolvedRendererOptions, file, context);
-        const webpackOptions: WebpackBuilderOptions = !this.options.productionMode ? await this.compileFile(compilationOptions) : this.validateCompilationOptions(compilationOptions);
+        const webpackOptions = this.validateCompilationOptions(compilationOptions);
+        const shouldCompile = !this.options.productionMode || !fs.existsSync(webpackOptions.outputFolder);
+        shouldCompile ? await this.compileFile(webpackOptions) : this.validateCompilationOptions(compilationOptions);
 
         if (req !== null && res !== null) {
             const renderedFile = await this.renderFile(webpackOptions, compilationOptions);
@@ -149,8 +151,7 @@ export class Renderer {
      * @param compilationOptions compilation options
      * @returns options used to compile webpack
      */
-    async compileFile(compilationOptions: CompilationOptions): Promise<WebpackBuilderOptions> {
-        const webpackOptions = this.validateCompilationOptions(compilationOptions);
+    async compileFile(webpackOptions: WebpackBuilderOptions): Promise<WebpackBuilderOptions> {
         const webpackBuilder = new WebpackBuilder(webpackOptions);
         await webpackBuilder.build();
         return webpackOptions;

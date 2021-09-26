@@ -8,15 +8,24 @@ import * as fs from 'fs';
 import { JSDOM } from 'jsdom';
 import * as process from 'process';
 
+const gitignore = fs.readFileSync(path.join(__dirname, 'dist', '.gitignore'));
 describe('renderer', () => {
     let app: express.Application;
+
+    before(() => {
+        fs.rmSync(path.join(__dirname, 'dist'), { recursive: true, force: true });
+        fs.mkdirSync(path.join(__dirname, 'dist'));
+        fs.writeFileSync(path.join(__dirname, 'dist', '.gitignore'), gitignore);
+    });
 
     beforeEach(() => {
         app = express();
     });
 
     afterEach(() => {
-        fs.rmSync(path.join(__dirname, 'dist', 'views'), { recursive: true, force: true });
+        fs.rmSync(path.join(__dirname, 'dist'), { recursive: true, force: true });
+        fs.mkdirSync(path.join(__dirname, 'dist'));
+        fs.writeFileSync(path.join(__dirname, 'dist', '.gitignore'), gitignore);
     });
 
     it('should create a renderer instance', () => {
@@ -237,9 +246,9 @@ describe('renderer', () => {
 
         const r = new Renderer(options);
         const compilationOptions = r.getCompilationOptions({ app } as RendererOptions, 'Test.vue', {});
+        const webpackOptions = r.validateCompilationOptions(compilationOptions);
         
-        await r.compileFile(compilationOptions);
-        
+        await r.compileFile(webpackOptions);
         const indexFileExistance = fs.existsSync(path.join(__dirname, 'dist', 'views', 'Test', 'index.html'));
         expect(indexFileExistance).to.deep.equal(true);
     }).timeout(30 * 1000);
@@ -255,7 +264,9 @@ describe('renderer', () => {
         const r = new Renderer(options);
         const compilationOptions = r.getCompilationOptions({ app } as RendererOptions, 'Test.vue', {});
 
-        const webpackOptions = await r.compileFile(compilationOptions);
+        const webpackOptions = r.validateCompilationOptions(compilationOptions);
+
+        await r.compileFile(webpackOptions);
         const indexFilePath = path.join(__dirname, 'dist', 'views', 'Test', 'index.html');
         const indexFileExistance = fs.existsSync(indexFilePath);
         expect(indexFileExistance).to.deep.equal(true);
@@ -399,6 +410,40 @@ describe('renderer', () => {
         });
 
         await r.prerender();
+        r.options.productionMode = true;
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const outputTestFolder = path.join(__dirname, 'dist/views/Test')
+        const testFolderExists = fs.existsSync(outputTestFolder);
+        expect(testFolderExists).to.be.true;
+
+        const dom = new JSDOM(req.text);
+        const testElement = dom.window.document.querySelector('#test')
+        expect(testElement).to.not.be.null;
+        expect(testElement!.textContent).to.equal('Hello, world!');
+    }).timeout(30 * 1000);
+
+    it('should render a file in production mode ', async () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {});
+        });
+
         r.options.productionMode = true;
 
         const req = await request(app)
