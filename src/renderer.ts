@@ -64,7 +64,13 @@ export class Renderer {
                             // ur mom could be harmful
                             // serious: this should only be eval'd code from the developer. if you are malicious
                             // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
-                            const fn = eval(match[0].replace(/\s\s+/g, ' ').replace('res.vue(', 'async () => await this.templateEngine(null, null, () => {}, ').replace(/__dirname/g, JSON.stringify(dir)) + '');
+                            let fnText = match[0].replace(/\s\s+/g, ' ').replace('res.vue(', 'async () => await this.templateEngine(null, null, () => {}, ');
+                            if (dir) {
+                                fnText = fnText.replace(/__dirname/g, JSON.stringify(dir));
+                            } else {
+                                fnText = fnText.replace(/__dirname/g, JSON.stringify(this.options.projectDirectory));
+                            }
+                            const fn = eval(fnText);
                             promises.push(fn());
                         }
                     }
