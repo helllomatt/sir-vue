@@ -5,9 +5,16 @@ import { Configuration as webpackConfiguration } from 'webpack';
 import { WebpackBuilder, WebpackBuilderOptions } from './webpack';
 import { renderToString } from '@vue/server-renderer';
 const jsToString = require('js-to-string');
-export class Renderer {
-    options: RendererOptions;
+import { resolveFolder, resolveFile, resolvePackageFile } from './dir';
 
+export class Renderer {
+    options: ResolvedRendererOptions;
+
+    /**
+     * Creates a new instance of the renderer and applies any default
+     * options
+     * @param options renderer options
+     */
     constructor(options?: RendererOptions) {
         if (!options) {
             throw new Error(`Missing options for the renderer.`);
@@ -26,8 +33,7 @@ export class Renderer {
 
         this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.js`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = path.join(this.options.outputFolder!, req.path.replace(this.options.publicPrefix!, '')); 
-                console.log(bundleFilePath);
+                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, '')); 
                 if (fs.existsSync(bundleFilePath)) {
                     res.setHeader('Content-Type', 'application/javascript');
                     res.send(fs.readFileSync(bundleFilePath, 'utf-8'));
@@ -37,6 +43,36 @@ export class Renderer {
                 }
             },
         );
+    }
+
+    /**
+     * Compiles everything in the express router stack that uses `res.vue` without
+     * sending any responses. Just outputs the files from webpack
+     * @param dir base directory to replace __dirname
+     * @returns promise that everything compiled
+     */
+    async prerender(dir?: string): Promise<any[]> {
+        const promises: Promise<any>[] = [];
+
+        this.options.app._router.stack.forEach(async ({ route }: any) => { 
+            if (route && route.path && route.path.indexOf(this.options.publicPrefix) !== 0) {
+                const re = RegExp('res.vue\\(([^]+\\))', 'gm');
+                let match: RegExpExecArray | null = null;
+                for (const stack of route.stack) {
+                    while ((match = re.exec(stack.handle.toString())) !== null) {
+                        if (match.length > 0) {
+                            // ur mom could be harmful
+                            // serious: this should only be eval'd code from the developer. if you are malicious
+                            // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
+                            const fn = eval(match[0].replace(/\s\s+/g, ' ').replace('res.vue(', 'async () => await this.templateEngine(null, null, () => {}, ').replace(/__dirname/g, JSON.stringify(dir)) + '');
+                            promises.push(fn());
+                        }
+                    }
+                }
+            }
+        });
+
+       return Promise.all(promises);
     }
 
     /**
@@ -52,29 +88,67 @@ export class Renderer {
         }.bind(this);
     }
 
+    /**
+     * Function to get all of the compilation options for a specific render call
+     * @param overrideOptions options to override class options
+     * @param file file to render
+     * @param context context data
+     * @returns compilation options
+     */
     getCompilationOptions(overrideOptions: RendererOptionsOverride, file: string, context: any): CompilationOptions {
-        const rendererOptions = { ...this.options, ...(overrideOptions || {}) } as RendererOptions;
+        const rendererOptions = { ...this.options, ...(overrideOptions || {}) } as ResolvedRendererOptions;
 
         return {
             rendererOptions,
-            inputFile: this.resolveFile(file, rendererOptions.viewsFolder),
+            inputFile: resolveFile(file, rendererOptions.viewsFolder),
             context: context || {}
         } as CompilationOptions;
     }
     
-
+    /**
+     * Returns just the compilation options for when calling the function through
+     * an express request. This should mainly be called for debugging purposes to see
+     * how things are working on the backend
+     * @param req express requist
+     * @param res express response
+     * @param next express next function
+     * @param file file to render
+     * @param context context data
+     * @param options override options
+     * @returns compilation options
+     */
     templateEngineConfig(req: express.Request, res: express.Response, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride): CompilationOptions {
-        return this.getCompilationOptions(this.applyDefaultOptions({ ...this.options, ...(options || { } as RendererOptions)}), file, context);
+        return this.getCompilationOptions(this.applyDefaultOptions({ ...this.options, ...(options || { } as ResolvedRendererOptions)}), file, context);
         
     }
 
-    async templateEngine(req: express.Request, res: express.Response, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride) {
-        const compilationOptions = this.getCompilationOptions(options || { app: this.options.app } as RendererOptions, file, context);
-        const webpackOptions = await this.compileFile(compilationOptions);
-        const renderedFile = await this.renderFile(webpackOptions, compilationOptions);
-        this.sendFile(req, res, next, renderedFile);
+    /**
+     * Compiles the file, and sends out the compiled contents with the context applied to it.
+     * From here, express should pick up the client bundle file and serve that so the hydration
+     * can happen on the server
+     * @param req express request
+     * @param res express response
+     * @param next express next function
+     * @param file file to render
+     * @param context context data
+     * @param options override option
+     */
+    async templateEngine(req: express.Request | null, res: express.Response | null, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride) {
+        const compilationOptions: CompilationOptions = this.getCompilationOptions(options || { app: this.options.app } as ResolvedRendererOptions, file, context);
+        const webpackOptions: WebpackBuilderOptions = !this.options.productionMode ? await this.compileFile(compilationOptions) : this.validateCompilationOptions(compilationOptions);
+
+        if (req !== null && res !== null) {
+            const renderedFile = await this.renderFile(webpackOptions, compilationOptions);
+            this.sendFile(req, res, next, renderedFile);
+        }
     }
 
+    /**
+     * Uses webpack to compile everything needed for the page to load based on the
+     * compilation options given.
+     * @param compilationOptions compilation options
+     * @returns options used to compile webpack
+     */
     async compileFile(compilationOptions: CompilationOptions): Promise<WebpackBuilderOptions> {
         const webpackOptions = this.validateCompilationOptions(compilationOptions);
         const webpackBuilder = new WebpackBuilder(webpackOptions);
@@ -82,6 +156,13 @@ export class Renderer {
         return webpackOptions;
     }
 
+    /**
+     * Renders the compiled webpack bundle for vue, injecting all of the context data and
+     * plugging it into the template to provide full, valid html.
+     * @param webpackOptions data coming from a compiled webpack bundle
+     * @param compilationOptions compilation options
+     * @returns the rendered output as a string
+     */
     async renderFile(webpackOptions: WebpackBuilderOptions, compilationOptions: CompilationOptions): Promise<string> {
         const manifest = require(path.join(webpackOptions.outputFolder, 'vue-ssr-manifest.json'));
         const appPath = path.join(webpackOptions.outputFolder, manifest['main.js']);
@@ -92,46 +173,46 @@ export class Renderer {
         return outputFile.replace('0/** vue-ssr-initial-state **/', jsToString(compilationOptions.context)).replace('<!--vue-ssr-outlet-->', appContent);
     }
 
+    /**
+     * Sends a string of content out to an express response
+     * @param req express request
+     * @param res express response
+     * @param next express next function
+     * @param outputContent content to send
+     */
     async sendFile(req: express.Request, res: express.Response, next: express.NextFunction, outputContent: string) {
         res.send(outputContent);
     }
 
+    /**
+     * Puts together all of the compilation options into something that the webpack builder
+     * can use to generate the bundle files
+     * @param options compilation options
+     * @returns webpack builder options
+     */
     validateCompilationOptions(options: CompilationOptions): WebpackBuilderOptions {
         if (!options.inputFile) {
             throw new Error(`Invalid input file to compile`);
-        }
-
-        if (!this.options.outputFolder) {
-            throw new Error(`Cannot compile to output folder ${this.options.outputFolder}`);
-        }
-
-        if (!this.options.entryFiles) {
-            throw new Error(`Cannot use provided entry files to compile. ${this.options.entryFiles}`);
-        }
-
-        const override: boolean = this.options.webpackOverride || false
-
-        let customWebpackOptions: WebpackOptions;
-        if (!this.options.webpack) {
-            customWebpackOptions = {
-                server: {},
-                client: {}
-            };
-        } else {
-            customWebpackOptions = this.options.webpack;
         }
 
         return {
             outputFolder: this.getWebpackOutputPath(this.options.outputFolder, options.inputFile, true),
             inputFile: options.inputFile,
             entryFiles: this.options.entryFiles,
-            webpackOverride: override,
-            custom: customWebpackOptions,
+            webpackOverride: this.options.webpackOverride,
+            custom: this.options.webpack,
             publicPrefix: `${this.options.publicPrefix}/${this.getWebpackOutputPath(this.options.outputFolder, options.inputFile)}`,
             templateFile: this.options.templateFile,
         } as WebpackBuilderOptions;
     }
 
+    /**
+     * Determines the path of the output folder that webpack should compile to.
+     * @param outputRoot root folder
+     * @param inputFilePath input file
+     * @param absolutePath if the absolute path should be returned
+     * @returns output path
+     */
     getWebpackOutputPath(outputRoot: string, inputFilePath: string, absolutePath: boolean = false): string {
         const diff = path.relative(outputRoot, inputFilePath).split(path.sep).filter(i => i !== '..' && i !== '.').join(path.sep);
         const parsed = path.parse(diff);
@@ -156,12 +237,12 @@ export class Renderer {
      * @param options given renderer options
      * @returns renderer options with defaults/undefined filled out
      */
-    private applyDefaultOptions(options: RendererOptions): RendererOptions {
+    private applyDefaultOptions(options: RendererOptions): ResolvedRendererOptions {
         const projectDirectory = this.resolveProjectDirectory(options.projectDirectory);
         return {
             projectDirectory,
-            viewsFolder: this.resolveFolder(options.viewsFolder, projectDirectory),
-            outputFolder: this.resolveFolder(options.outputFolder, projectDirectory),
+            viewsFolder: resolveFolder(options.viewsFolder || 'views', projectDirectory),
+            outputFolder: resolveFolder(options.outputFolder || 'dist', projectDirectory, true),
             webpackOverride: options.webpackOverride || false,
             webpack: {
                 client: options.webpack?.client || {},
@@ -169,13 +250,14 @@ export class Renderer {
             } as WebpackOptions,
             publicPrefix: options.publicPrefix || '/public/ssr',
             app: options.app,
-            templateFile: options.templateFile ? this.resolveFile(options.templateFile, projectDirectory) : this.resolvePackageFile('build-files/template.html'),
+            templateFile: options.templateFile ? resolveFile(options.templateFile, projectDirectory) : resolvePackageFile('build-files/template.html'),
             entryFiles: {
-                app: options.entryFiles?.app ? this.resolveFile(options.entryFiles.app, projectDirectory) : this.resolvePackageFile('build-files/app.js'),
-                client: options.entryFiles?.client ? this.resolveFile(options.entryFiles.client, projectDirectory) : this.resolvePackageFile('build-files/entry-client.js'),
-                server: options.entryFiles?.server ? this.resolveFile(options.entryFiles.server, projectDirectory) : this.resolvePackageFile('build-files/entry-server.js')
-            }
-        } as RendererOptions;
+                app: options.entryFiles?.app ? resolveFile(options.entryFiles.app, projectDirectory) : resolvePackageFile('build-files/app.js'),
+                client: options.entryFiles?.client ? resolveFile(options.entryFiles.client, projectDirectory) : resolvePackageFile('build-files/entry-client.js'),
+                server: options.entryFiles?.server ? resolveFile(options.entryFiles.server, projectDirectory) : resolvePackageFile('build-files/entry-server.js')
+            },
+            productionMode: options.productionMode || process.env.NODE_ENV || false
+        } as ResolvedRendererOptions;
     }
 
     /**
@@ -191,89 +273,6 @@ export class Renderer {
 
         return pd || process.cwd();
     }
-
-    /**
-     * Finds/validates a folder path. If a relative path was given, it will be looked for
-     * within the current project directory variable.
-     * @param folder folder to resolve
-     * @returns resovled folder path
-     */
-    resolveFolder(folder?: string, projectDirectory?: string): string {
-        if (!folder || folder === '') {
-            throw new Error(`Cannot resolve an undefined folder.`);
-        }
-
-        // check if the given "folder" is actually a path
-        if (fs.existsSync(folder)) {
-            return path.resolve(folder);
-        } else {
-            if (!this.options) {
-                console.log(this.options);
-                throw new Error(`Failed to resolve folder because no project directory has been set and this folder may not exist.`);
-            }
-
-            const pd = projectDirectory || this.options.projectDirectory || null;
-
-            if (!pd) {
-                throw new Error(`Cannot resolve a folder no project directory has been set.`);
-            }
-
-            const fp = path.join(pd, folder);
-
-            if (!fs.existsSync(fp)) {
-                throw new Error(`Folder at path ${fp} does not exist.`);
-            }
-
-            return fp;
-        }
-    }
-
-    /**
-     * Finds/validates a file path. If a relative path was given, it will be looked for
-     * within the current project directory variable.
-     * @param file file to resolve
-     * @returns resolved file path
-     */
-    resolveFile(file?: string, projectDirectory?: string): string {
-        if (!file || file === '') {
-            throw new Error(`Cannot resolve an undefined file.`);
-        }
-
-        // check if the given "file" is actually a path
-        if (fs.existsSync(file)) {
-            return path.resolve(file);
-        } else {
-            const pd = projectDirectory || this.options.projectDirectory || null;
-
-            if (!pd) {
-                throw new Error(`Cannot resolve a file no project directory has been set.`);
-            }
-
-            const fp = path.join(pd, file);
-
-            if (!fs.existsSync(fp)) {
-                throw new Error(`File at path ${fp} does not exist.`);
-            }
-
-            return fp;
-        }
-    }
-
-    /**
-     * Finds and resolves a file within this package
-     * @param file file to resolve
-     * @returns resolved file path
-     */
-    resolvePackageFile(file: string): string {
-        const packageRoot = __dirname;
-        const fp = path.join(packageRoot, file);
-
-        if (!fs.existsSync(fp)) {
-            throw new Error(`Package file at path ${fp} does not exist.`);
-        }
-
-        return fp;
-    }
 }
 
 export interface RendererOptions {
@@ -286,6 +285,20 @@ export interface RendererOptions {
     app: express.Application;
     templateFile?: string;
     entryFiles?: EntryFiles;
+    productionMode?: boolean;
+    // TODO: add htmlwebpackplugin options
+}
+interface ResolvedRendererOptions {
+    projectDirectory: string;
+    viewsFolder: string;
+    outputFolder: string;
+    webpackOverride: boolean;
+    webpack: WebpackOptions;
+    publicPrefix: string;
+    app: express.Application;
+    templateFile: string;
+    entryFiles: EntryFiles;
+    productionMode: boolean;
     // TODO: add htmlwebpackplugin options
 }
 

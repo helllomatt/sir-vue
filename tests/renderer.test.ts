@@ -6,6 +6,7 @@ import * as express from 'express';
 import * as request from 'supertest';
 import * as fs from 'fs';
 import { JSDOM } from 'jsdom';
+import * as process from 'process';
 
 describe('renderer', () => {
     let app: express.Application;
@@ -36,6 +37,18 @@ describe('renderer', () => {
         expect(renderer.options.projectDirectory).to.equal(process.cwd());
     });
 
+    it('should create a renderer instance with minimal options', () => {
+        process.chdir(__dirname);
+        const options: RendererOptions = {
+            app
+        };
+
+        const renderer = new Renderer(options);
+        expect(renderer.options.viewsFolder).to.equal(path.join(__dirname, 'views'));
+        expect(renderer.options.outputFolder).to.equal(path.join(__dirname, 'dist'));
+        process.chdir('../');
+    });
+
     it('should set a new project directory', () => {
         const options: RendererOptions = {
             app,
@@ -62,92 +75,6 @@ describe('renderer', () => {
         expect(() => {
             renderer.resolveProjectDirectory('_');
         }).to.throw(Error, `Project directory at path _ does not exist.`);
-    });
-
-    it('should try to resolve a folder', () => {
-        const options: RendererOptions = {
-            app,
-            viewsFolder: 'tests',
-            outputFolder: 'tests',
-        };
-
-        const renderer = new Renderer(options);
-        expect(renderer.options.viewsFolder).to.equal(path.join(process.cwd(), 'tests'));
-
-        expect(() => {
-            renderer.options.projectDirectory = undefined;
-            renderer.resolveFolder('testers', undefined);
-        }).to.throw(Error, `Cannot resolve a folder no project directory has been set.`);
-
-        renderer.options.projectDirectory = process.cwd();
-
-        expect(() => {
-            renderer.resolveFolder();
-        }).to.throw(Error, `Cannot resolve an undefined folder.`);
-
-        expect(() => {
-            renderer.resolveFolder('');
-        }).to.throw(Error, `Cannot resolve an undefined folder.`);
-
-        const vfSrc = path.join(process.cwd(), 'src');
-        const viewsFolder = renderer.resolveFolder(vfSrc);
-        expect(viewsFolder).to.equal(vfSrc);
-
-        expect(() => {
-            renderer.resolveFolder('_');
-        }).to.throw(Error, `Folder at path ${path.join(process.cwd(), '_')} does not exist.`);
-    });
-
-    it('should try to resolve a file', () => {
-        const options: RendererOptions = {
-            app,
-            viewsFolder: 'tests',
-            outputFolder: 'tests',
-        };
-
-        const renderer = new Renderer(options);
-        expect(renderer.options.viewsFolder).to.equal(path.join(process.cwd(), 'tests'));
-
-        expect(() => {
-            renderer.options.projectDirectory = undefined;
-            renderer.resolveFile('_');
-        }).to.throw(Error, `Cannot resolve a file no project directory has been set.`);
-
-        renderer.options.projectDirectory = process.cwd();
-
-        expect(() => {
-            renderer.resolveFile();
-        }).to.throw(Error, `Cannot resolve an undefined file.`);
-
-        expect(() => {
-            renderer.resolveFile('');
-        }).to.throw(Error, `Cannot resolve an undefined file.`);
-
-        const vfSrc = path.join(process.cwd(), 'src', 'index.ts');
-        const viewsFolder = renderer.resolveFile(vfSrc);
-        expect(viewsFolder).to.equal(vfSrc);
-
-        expect(() => {
-            renderer.resolveFile('_');
-        }).to.throw(Error, `File at path ${path.join(process.cwd(), '_')} does not exist.`);
-    });
-
-    it('should try to resolve a file within the package itself', () => {
-        const options: RendererOptions = {
-            app,
-            viewsFolder: 'tests',
-            outputFolder: 'tests',
-        };
-
-        const renderer = new Renderer(options);
-
-        // __dirname is tests right now, but we need it to be src
-        const file = path.join(__dirname, '../src/index.ts');
-        expect(renderer.resolvePackageFile('index.ts')).to.equal(file);
-
-        expect(() => {
-            renderer.resolvePackageFile('_');
-        }).to.throw(Error, `Package file at path ${path.join(__dirname, '../src/_')} does not exist.`);
     });
 
     it('should inject the render middleware to vue', () => {
@@ -286,6 +213,20 @@ describe('renderer', () => {
         expect(absoluteWebpackOutput).to.equal(path.join(__dirname, 'dist', 'Test'));
     });
 
+    it('should fail to validate compilation options because of a missing input file variable', () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+        expect(() => {
+            r.validateCompilationOptions({} as CompilationOptions);
+        }).to.throw(Error, 'Invalid input file to compile');
+    });
+
     it('should render the html file', async () => {
         const options: RendererOptions = {
             app,
@@ -405,5 +346,72 @@ describe('renderer', () => {
         expect(testChildElement).to.not.be.null;
         expect(testChildElement!.textContent).to.equal(`Hello, world I'm a sub component!`);
         expect(testChildElement!.previousSibling).to.equal(testParentElement);
+    }).timeout(30 * 1000);
+
+    it('should prerender the bundle based on the routes given, without calling the route', async () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {});
+        });
+        app.get('/another', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('AnotherTest.vue', {}, {});
+        });
+
+        await r.prerender();
+
+        const outputTestFolder = path.join(__dirname, 'dist/views/Test')
+        const testFolderExists = fs.existsSync(outputTestFolder);
+        expect(testFolderExists).to.be.true;;
+
+        const outputAnotherFolder = path.join(__dirname, 'dist/views/Test')
+        const anotherFolderExists = fs.existsSync(outputAnotherFolder);
+        expect(anotherFolderExists).to.be.true;
+    }).timeout(30 * 1000);
+
+    it('should render a prerendered bundle/file', async () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {});
+        });
+
+        await r.prerender();
+        r.options.productionMode = true;
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const outputTestFolder = path.join(__dirname, 'dist/views/Test')
+        const testFolderExists = fs.existsSync(outputTestFolder);
+        expect(testFolderExists).to.be.true;
+
+        const dom = new JSDOM(req.text);
+        const testElement = dom.window.document.querySelector('#test')
+        expect(testElement).to.not.be.null;
+        expect(testElement!.textContent).to.equal('Hello, world!');
     }).timeout(30 * 1000);
 });

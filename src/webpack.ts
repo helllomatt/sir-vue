@@ -11,6 +11,10 @@ export class WebpackBuilder {
         client: Configuration
     }
 
+    /**
+     * Constructs a new instance of the Webpack Builder
+     * @param options webpack builder options
+     */
     constructor(options: WebpackBuilderOptions) {
         this.options = options;
 
@@ -20,6 +24,11 @@ export class WebpackBuilder {
         }
     }
 
+    /**
+     * Puts together all of the options into something that webpack and ingest
+     * for both the server bundle and the client bundle
+     * @returns [server config, client config]
+     */
     getConfig() {
         fs.mkdirSync(this.options.outputFolder, {
             recursive: true
@@ -64,6 +73,13 @@ export class WebpackBuilder {
         return [serverConfig, clientConfig];
     }
 
+    /**
+     * Helper function for the build output/results of webpack to find
+     * any errors and return them in a consistent format
+     * @param err webpack errors
+     * @param stats webpack stats
+     * @returns [found errors]
+     */
     hasErrors(err?: Error, stats?: MultiStats): string[] {
         if (err) {
             return [err.message];
@@ -84,6 +100,11 @@ export class WebpackBuilder {
         }
     }
 
+    /**
+     * The function to actually run the webpack compilation and generate all of the
+     * bundle files.
+     * @returns webpack build promise results
+     */
     build() {
         const config = this.getConfig();
         const compiler = webpack(config);
