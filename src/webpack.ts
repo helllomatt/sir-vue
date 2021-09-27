@@ -32,7 +32,7 @@ export class WebpackBuilder {
     getConfig() {
         // we want the latest version of everything, so delete all prior to get the
         // latest
-        if (fs.existsSync(this.options.outputFolder)) {
+        if (fs.existsSync(this.options.outputFolder) && !this.options.productionMode) {
             fs.rmSync(this.options.outputFolder, {
                 recursive: true
             });
