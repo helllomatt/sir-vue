@@ -31,7 +31,7 @@ export class Renderer {
     inject() {
         this.options.app.use(this.engine());
 
-        this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.js`,
+        this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
                 const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, '')); 
                 if (fs.existsSync(bundleFilePath)) {
@@ -104,11 +104,39 @@ export class Renderer {
     getCompilationOptions(overrideOptions: RendererOptionsOverride, file: string, context: any): CompilationOptions {
         const rendererOptions = { ...this.options, ...(overrideOptions || {}) } as ResolvedRendererOptions;
 
+        let title = this.getTitle(overrideOptions);
+        if (rendererOptions.html) {
+            title ? rendererOptions.html.title = title : delete rendererOptions.html.title;
+        }
+
         return {
             rendererOptions,
             inputFile: resolveFile(file, rendererOptions.viewsFolder),
             context: context || {}
         } as CompilationOptions;
+    }
+
+    /**
+     * Figures out the title of the page based on the special `title` function in the 
+     * rendere title callback. If no callback was defined, then the title defined 
+     * on the request is given. If nothing ever was defined ever, then the default
+     * HtmlWebpackPlugin title takes effect.
+     * @param overrideOptions options provded to override
+     * @returns title of the page
+     */
+    getTitle(overrideOptions: RendererOptionsOverride): string | null {
+        let title: string | null = null;
+        if (this.options.html && this.options.html.title) {
+            if (typeof this.options.html.title === 'function') {
+                title = overrideOptions.html && overrideOptions.html.title ? this.options.html.title(overrideOptions.html.title) : this.options.html.title();
+            } else if (typeof this.options.html.title === 'string') {
+                title = this.options.html.title;
+            }
+        } else if (overrideOptions && overrideOptions.html && overrideOptions.html.title) {
+            title = overrideOptions.html.title;
+        }
+
+        return title;
     }
     
     /**
@@ -210,6 +238,8 @@ export class Renderer {
             custom: this.options.webpack,
             publicPrefix: `${this.options.publicPrefix}/${this.getWebpackOutputPath(this.options.outputFolder, options.inputFile)}`,
             templateFile: this.options.templateFile,
+            html: options.rendererOptions.html,
+            productionMode: this.options.productionMode
         } as WebpackBuilderOptions;
     }
 
@@ -263,7 +293,8 @@ export class Renderer {
                 client: options.entryFiles?.client ? resolveFile(options.entryFiles.client, projectDirectory) : resolvePackageFile('build-files/entry-client.js'),
                 server: options.entryFiles?.server ? resolveFile(options.entryFiles.server, projectDirectory) : resolvePackageFile('build-files/entry-server.js')
             },
-            productionMode: options.productionMode || process.env.NODE_ENV || false
+            productionMode: options.productionMode || process.env.NODE_ENV || false,
+            html: options.html || {},
         } as ResolvedRendererOptions;
     }
 
@@ -293,7 +324,7 @@ export interface RendererOptions {
     templateFile?: string;
     entryFiles?: EntryFiles;
     productionMode?: boolean;
-    // TODO: add htmlwebpackplugin options
+    html?: any;
 }
 interface ResolvedRendererOptions {
     projectDirectory: string;
@@ -306,7 +337,7 @@ interface ResolvedRendererOptions {
     templateFile: string;
     entryFiles: EntryFiles;
     productionMode: boolean;
-    // TODO: add htmlwebpackplugin options
+    html: any;
 }
 
 export interface RendererOptionsOverride {
@@ -317,7 +348,7 @@ export interface RendererOptionsOverride {
     publicPrefix?: string;
     templateFile?: string;
     entryFiles?: EntryFiles;
-    // TODO: add htmlwebpackplugin options
+    html?: any;
 }
 
 export interface CompilationOptions {

@@ -8,14 +8,14 @@ import * as fs from 'fs';
 import { JSDOM } from 'jsdom';
 import * as process from 'process';
 
-const gitignore = fs.readFileSync(path.join(__dirname, 'dist', '.gitignore'));
+const gitignore = path.join(__dirname, 'dist', '.gitignore')
 describe('renderer', () => {
     let app: express.Application;
 
     before(() => {
         fs.rmSync(path.join(__dirname, 'dist'), { recursive: true, force: true });
         fs.mkdirSync(path.join(__dirname, 'dist'));
-        fs.writeFileSync(path.join(__dirname, 'dist', '.gitignore'), gitignore);
+        if (!fs.existsSync(gitignore)) fs.writeFileSync(gitignore, '*\n!.gitignore');
     });
 
     beforeEach(() => {
@@ -25,7 +25,7 @@ describe('renderer', () => {
     afterEach(() => {
         fs.rmSync(path.join(__dirname, 'dist'), { recursive: true, force: true });
         fs.mkdirSync(path.join(__dirname, 'dist'));
-        fs.writeFileSync(path.join(__dirname, 'dist', '.gitignore'), gitignore);
+        if (!fs.existsSync(gitignore)) fs.writeFileSync(gitignore, '*\n!.gitignore');
     });
 
     it('should create a renderer instance', () => {
@@ -234,6 +234,43 @@ describe('renderer', () => {
         expect(() => {
             r.validateCompilationOptions({} as CompilationOptions);
         }).to.throw(Error, 'Invalid input file to compile');
+    });
+
+    it('should get a title', () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            html: {
+                title(title?: string) {
+                    return title ? `${title} | WEBSITE` : `WEBSITE`;
+                }
+            }
+        };
+
+        const r = new Renderer(options);
+        let title;
+
+        title = r.getTitle({} as RendererOptionsOverride);
+        expect(title).to.equal('WEBSITE');
+
+        title = r.getTitle({ html: { title: 'MY PAGE' } } as RendererOptionsOverride);
+        expect(title).to.equal('MY PAGE | WEBSITE');
+    });
+
+    it('should get a page-only title', () => {
+        const options: RendererOptions = {
+            app,
+            projectDirectory: __dirname,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist'
+        };
+
+        const r = new Renderer(options);
+        let title;
+        title = r.getTitle({ html: { title: 'MY PAGE' } } as RendererOptionsOverride);
+        expect(title).to.equal('MY PAGE');
     });
 
     it('should render the html file', async () => {
@@ -458,5 +495,128 @@ describe('renderer', () => {
         const testElement = dom.window.document.querySelector('#test')
         expect(testElement).to.not.be.null;
         expect(testElement!.textContent).to.equal('Hello, world!');
+    }).timeout(30 * 1000);
+
+    it('should apply a default title', async () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            html: {
+                title(title: string) {
+                    return title ? `${title} | WEBSITE` : `WEBSITE`
+                }
+            }
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {});
+        });
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const dom = new JSDOM(req.text);
+        expect(dom.window.document.title).to.equal('WEBSITE');
+    }).timeout(30 * 1000);
+
+    it('should apply a title for a page', async () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            html: {
+                title(title: string) {
+                    return title ? `${title} | WEBSITE` : `WEBSITE`
+                }
+            }
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {
+                html: {
+                    title: 'MY PAGE'
+                }
+            });
+        });
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const dom = new JSDOM(req.text);
+        expect(dom.window.document.title).to.equal('MY PAGE | WEBSITE');
+    }).timeout(30 * 1000);
+
+    it('should apply a title for a page without a registered callback', async () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {
+                html: {
+                    title: 'MY PAGE'
+                }
+            });
+        });
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const dom = new JSDOM(req.text);
+        expect(dom.window.document.title).to.equal('MY PAGE');
+    }).timeout(30 * 1000);
+
+    it('should apply a custom html tag to the output', async () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            templateFile: path.join(__dirname, 'template.html')
+        };
+
+        const r = new Renderer(options);
+        expect(app._router).to.not.be.undefined;
+
+        const middleware = (app._router.stack.filter((layer: any) => layer.name === 'bound SirVueRenderer'));
+        expect(middleware.length).to.equal(1);
+
+        app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Test.vue', {}, {
+                html: {
+                    custom: `<link id='custom-stylesheet' href='google.com' />`
+                }
+            });
+        });
+
+        const req = await request(app)
+            .get('/')
+            .expect(200);
+
+        const dom = new JSDOM(req.text);
+        expect(dom.window.document.getElementById('custom-stylesheed')).to.not.be.undefined;
     }).timeout(30 * 1000);
 });

@@ -19,8 +19,8 @@ export class WebpackBuilder {
         this.options = options;
 
         this.config = {
-            server: this.options.webpackOverride ? this.options.custom.server : require('./build-files/webpack-server')(options.custom.server || {}, options),
-            client: this.options.webpackOverride ? this.options.custom.client : require('./build-files/webpack-client')(options.custom.client || {}, options),
+            server: this.options.webpackOverride ? this.options.custom.server : require('./build-files/webpack-server')(options.custom.server || {}, options, options.html),
+            client: this.options.webpackOverride ? this.options.custom.client : require('./build-files/webpack-client')(options.custom.client || {}, options, options.html),
         }
     }
 
@@ -30,6 +30,14 @@ export class WebpackBuilder {
      * @returns [server config, client config]
      */
     getConfig() {
+        // we want the latest version of everything, so delete all prior to get the
+        // latest
+        if (fs.existsSync(this.options.outputFolder)) {
+            fs.rmSync(this.options.outputFolder, {
+                recursive: true
+            });
+        }
+
         fs.mkdirSync(this.options.outputFolder, {
             recursive: true
         });
@@ -130,4 +138,6 @@ export interface WebpackBuilderOptions {
     custom: WebpackOptions,
     publicPrefix: string;
     templateFile: string;
+    html: any;
+    productionMode: boolean;
 }

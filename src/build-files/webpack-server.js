@@ -4,7 +4,7 @@ const { WebpackManifestPlugin } = require('webpack-manifest-plugin');
 const nodeExternals = require('webpack-node-externals');
 const { mergeWithRules } = require('webpack-merge');
 
-module.exports = (defaultOptions, options) => {
+module.exports = (defaultOptions, options, htmlOptions) => {
     return mergeWithRules({
         module: {
             rules: {
@@ -20,11 +20,11 @@ module.exports = (defaultOptions, options) => {
         plugins: 'merge'
     })({
         entry: 'entry-server.js',
-        mode: 'development',
+        mode: options.productionMode ? 'production' : 'development',
         target: 'node',
         output: {
             libraryTarget: 'commonjs2',
-            filename: 'bundle-server.js',
+            filename: 'bundle-server.[contenthash].js',
         },
         module: {
             rules: [

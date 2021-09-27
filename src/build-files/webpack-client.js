@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader-v16');
 const { mergeWithRules } = require('webpack-merge');
 
-module.exports = (defaultOptions, options) => {
+module.exports = (defaultOptions, options, htmlOptions = {}) => {
     return mergeWithRules({
         module: {
             rules: {
@@ -22,7 +22,7 @@ module.exports = (defaultOptions, options) => {
         mode: 'development',
         devtool: 'source-map',
         output: {
-            filename: 'bundle-client.js',
+            filename: 'bundle-client.[contenthash].js',
             publicPath: '/',
         },
         module: {
@@ -80,10 +80,9 @@ module.exports = (defaultOptions, options) => {
                 maxChunks: 1
             }),
             new HtmlWebpackPlugin({
-                // ...options.html,
+                ...htmlOptions,
                 publicPath: options.publicPrefix,
                 template: options.templateFile,
-                // title: options.title,
                 scriptLoading: 'blocking'
             }),
         ],
