@@ -1,5 +1,9 @@
 # SIR VUE
+![npm publish](https://github.com/helllomatt/sir-vue/actions/workflows/npm-publish.yml/badge.svg)
+
 Vue SSR renderer
+
+For more help setting things up and using the library, check out the [wiki](https://github.com/helllomatt/sir-vue/wiki).
 
 ## Installation
 
