@@ -102,7 +102,7 @@ export class Renderer {
      * @returns compilation options
      */
     getCompilationOptions(overrideOptions: RendererOptionsOverride, file: string, context: any): CompilationOptions {
-        const rendererOptions = { ...this.options, ...(overrideOptions || {}) } as ResolvedRendererOptions;
+        const rendererOptions = this.applyDefaultOptions({ ...this.options, ...(overrideOptions || {}) });
 
         let title = this.getTitle(overrideOptions);
         if (rendererOptions.html) {
