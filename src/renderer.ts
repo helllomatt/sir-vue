@@ -205,7 +205,7 @@ export class Renderer {
         const app = await createApp(compilationOptions.context);
         const appContent = await renderToString(app);
         const outputFile = fs.readFileSync(path.join(webpackOptions.outputFolder, 'index.html'), 'utf-8');
-        return outputFile.replace('0/** vue-ssr-initial-state **/', jsToString(compilationOptions.context)).replace('<!--vue-ssr-outlet-->', appContent);
+        return outputFile.replace('/** sir-vue-initial-state **/', `window.__INITIAL_STATE__ = ${jsToString(compilationOptions.context)}`).replace('<!--sir-vue-outlet-->', `<div id='app'>${appContent}</div>`);
     }
 
     /**
