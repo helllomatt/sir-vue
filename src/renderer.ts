@@ -322,7 +322,7 @@ export interface RendererOptions {
     publicPrefix?: string;
     app: express.Application;
     templateFile?: string;
-    entryFiles?: EntryFiles;
+    entryFiles?: EntryFilesOption;
     productionMode?: boolean;
     html?: any;
 }
