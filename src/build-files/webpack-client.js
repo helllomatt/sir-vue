@@ -19,7 +19,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
         plugins: 'merge'
     })({
         entry: 'entry-client.js',
-        mode: 'development',
+        mode: options.productionMode ? 'production' : 'development',
         devtool: 'source-map',
         output: {
             filename: 'bundle-client.[contenthash].js',
@@ -73,8 +73,8 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
         plugins: [
             new VueLoaderPlugin(),
             new webpack.DefinePlugin({
-                __VUE_OPTIONS_API__: true,
-                __VUE_PROD_DEVTOOLS__: true,
+                __VUE_OPTIONS_API__: !options.productionMode,
+                __VUE_PROD_DEVTOOLS__: !options.productionMode,
             }),
             new webpack.optimize.LimitChunkCountPlugin({
                 maxChunks: 1
