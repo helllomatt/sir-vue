@@ -54,7 +54,7 @@ export class WebpackBuilder {
 
         // input paths either from the user-defined or default
         const inputPaths = {
-            app: path.join(__dirname, 'build-files/app.js'),
+            app: this.options.entryFiles.app,
             server: this.options.entryFiles.server,
             client: this.options.entryFiles.client
         };
