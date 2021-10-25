@@ -106,7 +106,7 @@ export class Renderer {
 
         let title = this.getTitle(overrideOptions);
         if (rendererOptions.html) {
-            title ? rendererOptions.html.title = title : delete rendererOptions.html.title;
+            rendererOptions.html.title = title ? title : path.basename(file);
         }
 
         return {
@@ -366,4 +366,10 @@ export interface EntryFiles {
     app: string;
     client: string;
     server: string;
+}
+
+export interface EntryFilesOption {
+    app?: string;
+    client?: string;
+    server?: string;
 }
