@@ -38,6 +38,7 @@ module.exports = (defaultOptions, options, htmlOptions) => {
                 },
                 {
                     test: /\.js$/,
+                    exclude: /node_modules/,
                     loader: 'babel-loader',
                 },
                 {
@@ -52,6 +53,7 @@ module.exports = (defaultOptions, options, htmlOptions) => {
         },
         'resolve': {
             alias: {
+                '$$': options.projectDirectory,
                 vue: 'vue/dist/vue.runtime.esm-bundler.js',
             },
             'extensions': [

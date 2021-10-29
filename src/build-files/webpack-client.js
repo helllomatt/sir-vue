@@ -38,6 +38,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
                 {
                     test: /\.js$/,
                     loader: 'babel-loader',
+                    exclude: /node_modules/,
                     options: {
                         presets: ['@babel/preset-env'],
                     }
@@ -54,6 +55,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
         },
         'resolve': {
             alias: {
+                '$$': options.projectDirectory,
                 vue: 'vue/dist/vue.runtime.esm-bundler.js',
             },
             'extensions': [
