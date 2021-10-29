@@ -239,7 +239,8 @@ export class Renderer {
             publicPrefix: `${this.options.publicPrefix}/${this.getWebpackOutputPath(this.options.outputFolder, options.inputFile)}`,
             templateFile: this.options.templateFile,
             html: options.rendererOptions.html,
-            productionMode: this.options.productionMode
+            productionMode: this.options.productionMode,
+            projectDirectory: this.options.projectDirectory,
         } as WebpackBuilderOptions;
     }
 
@@ -354,7 +355,7 @@ export interface RendererOptionsOverride {
 export interface CompilationOptions {
     rendererOptions: RendererOptions;
     inputFile: string;
-    context: any;    
+    context: any;
 }
 
 export interface WebpackOptions {

@@ -61,7 +61,8 @@ export class WebpackBuilder {
 
         // copy server/client entry files to output location with proper information replaced
         fs.writeFileSync(outputPaths.app, fs.readFileSync(inputPaths.app, 'utf-8')
-            .replace(`'{{vue-render-file}}'`, JSON.stringify(this.options.inputFile)));
+            .replace(`'{{vue-render-file}}'`, JSON.stringify(this.options.inputFile))
+            .replace(`{{root}}`, JSON.stringify(this.options.projectDirectory).replace(/['"]+/g, '')));
         fs.writeFileSync(outputPaths.server, fs.readFileSync(inputPaths.server, 'utf-8'));
         fs.writeFileSync(outputPaths.client, fs.readFileSync(inputPaths.client, 'utf-8'));
 
@@ -140,4 +141,5 @@ export interface WebpackBuilderOptions {
     templateFile: string;
     html: any;
     productionMode: boolean;
+    projectDirectory: string;
 }
