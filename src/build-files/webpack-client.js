@@ -85,7 +85,15 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
                 ...htmlOptions,
                 publicPath: options.publicPrefix,
                 template: options.templateFile,
-                scriptLoading: 'blocking'
+                minify: {
+                    removeComments: false, // this is always necessary for SSR injection
+                    collapseWhitespace: options.productionMode,
+                    keepClosingSlash: options.productionMode,
+                    removeRedundantAttributes: options.productionMode,
+                    removeScriptTypeAttributes: options.productionMode,
+                    removeStyleLinkTypeAttributes: options.productionMode,
+                    useShortDoctype: options.productionMode
+                }
             }),
         ],
     }, defaultOptions);
