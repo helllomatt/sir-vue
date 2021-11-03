@@ -1,4 +1,4 @@
-import { EntryFiles, WebpackOptions } from "./renderer";
+import { EntryFiles, FSOptions, WebpackOptions } from "./renderer";
 import * as path from 'path';
 import * as fs from 'fs';
 import { Configuration, MultiStats, webpack } from "webpack";
@@ -32,15 +32,11 @@ export class WebpackBuilder {
     getConfig() {
         // we want the latest version of everything, so delete all prior to get the
         // latest
-        if (fs.existsSync(this.options.outputFolder) && !this.options.productionMode) {
-            fs.rmSync(this.options.outputFolder, {
-                recursive: true
-            });
+        if (this.options.fs.exists(this.options.outputFolder) && !this.options.productionMode) {
+            this.options.fs.rm(this.options.outputFolder);
         }
 
-        fs.mkdirSync(this.options.outputFolder, {
-            recursive: true
-        });
+        this.options.fs.mkdir(this.options.outputFolder);
 
         const serverEntryFile = path.basename(this.options.entryFiles.server);
         const clientEntryFile = path.basename(this.options.entryFiles.client);
@@ -60,11 +56,11 @@ export class WebpackBuilder {
         };
 
         // copy server/client entry files to output location with proper information replaced
-        fs.writeFileSync(outputPaths.app, fs.readFileSync(inputPaths.app, 'utf-8')
+        this.options.fs.write(outputPaths.app, fs.readFileSync(inputPaths.app, 'utf-8')
             .replace(`'{{vue-render-file}}'`, JSON.stringify(this.options.inputFile))
             .replace(`{{root}}`, JSON.stringify(this.options.projectDirectory).replace(/['"]+/g, '')));
-        fs.writeFileSync(outputPaths.server, fs.readFileSync(inputPaths.server, 'utf-8'));
-        fs.writeFileSync(outputPaths.client, fs.readFileSync(inputPaths.client, 'utf-8'));
+        this.options.fs.write(outputPaths.server, fs.readFileSync(inputPaths.server, 'utf-8'));
+        this.options.fs.write(outputPaths.client, fs.readFileSync(inputPaths.client, 'utf-8'));
 
         const serverConfig = merge(Object.assign({}, this.config.server), {
             entry: outputPaths.server,
@@ -142,4 +138,5 @@ export interface WebpackBuilderOptions {
     html: any;
     productionMode: boolean;
     projectDirectory: string;
+    fs: FSOptions;
 }

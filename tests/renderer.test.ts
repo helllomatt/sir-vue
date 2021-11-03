@@ -282,7 +282,7 @@ describe('renderer', () => {
         };
 
         const r = new Renderer(options);
-        const compilationOptions = r.getCompilationOptions({ app } as RendererOptions, 'Test.vue', {});
+        const compilationOptions = r.getCompilationOptions({ app } as RendererOptionsOverride, 'Test.vue', {});
         const webpackOptions = r.validateCompilationOptions(compilationOptions);
         
         await r.compileFile(webpackOptions);
@@ -299,7 +299,7 @@ describe('renderer', () => {
         };
 
         const r = new Renderer(options);
-        const compilationOptions = r.getCompilationOptions({ app } as RendererOptions, 'Test.vue', {});
+        const compilationOptions = r.getCompilationOptions({ app } as RendererOptionsOverride, 'Test.vue', {});
 
         const webpackOptions = r.validateCompilationOptions(compilationOptions);
 

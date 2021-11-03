@@ -1,5 +1,5 @@
-import * as fs from 'fs';
 import * as path from 'path';
+import { FSOptions } from './renderer';
 
 /**
  * Finds/validates a folder path. If a relative path was given, it will be looked for
@@ -8,13 +8,13 @@ import * as path from 'path';
  * @param rootFolder root folder path to look for the folder in
  * @returns resovled folder path
  */
-export const resolveFolder = (folder: string, rootFolder?: string, createIfNotExists: boolean = false): string => {
+export const resolveFolder = (fsOverride: FSOptions, folder: string, rootFolder?: string, createIfNotExists: boolean = false): string => {
     if (!folder || folder === '') {
         throw new Error(`Cannot resolve an undefined folder.`);
     }
 
     // check if the given "folder" is actually a path
-    if (fs.existsSync(folder)) {
+    if (fsOverride.exists(folder)) {
         return path.resolve(folder);
     } else {
         if (!rootFolder) {
@@ -23,11 +23,9 @@ export const resolveFolder = (folder: string, rootFolder?: string, createIfNotEx
 
         const fp = path.join(rootFolder, folder);
 
-        if (!fs.existsSync(fp)) {
+        if (!fsOverride.exists(fp)) {
             if (createIfNotExists) {
-                fs.mkdirSync(fp, {
-                    recursive: true
-                });
+                fsOverride.mkdir(fp);
             } else {
                 throw new Error(`Folder at path ${fp} does not exist.`);
             }
@@ -44,13 +42,13 @@ export const resolveFolder = (folder: string, rootFolder?: string, createIfNotEx
  * @param rootFolder root folder path to look for the folder in
  * @returns resolved file path
  */
-export const resolveFile = (file: string, rootFolder?: string): string => {
+export const resolveFile = (fsOverride: FSOptions, file: string, rootFolder?: string): string => {
     if (!file || file === '') {
         throw new Error(`Cannot resolve an undefined file.`);
     }
 
     // check if the given "file" is actually a path
-    if (fs.existsSync(file)) {
+    if (fsOverride.exists(file)) {
         return path.resolve(file);
     } else {
         if (!rootFolder) {
@@ -59,7 +57,7 @@ export const resolveFile = (file: string, rootFolder?: string): string => {
 
         const fp = path.join(rootFolder, file);
 
-        if (!fs.existsSync(fp)) {
+        if (!fsOverride.exists(fp)) {
             throw new Error(`File at path ${fp} does not exist.`);
         }
 
@@ -72,11 +70,11 @@ export const resolveFile = (file: string, rootFolder?: string): string => {
  * @param file file to resolve
  * @returns resolved file path
  */
-export const resolvePackageFile = (file: string): string => {
+export const resolvePackageFile = (fsOverride: FSOptions, file: string): string => {
     const packageRoot = __dirname;
     const fp = path.join(packageRoot, file);
 
-    if (!fs.existsSync(fp)) {
+    if (!fsOverride.exists(fp)) {
         throw new Error(`Package file at path ${fp} does not exist.`);
     }
 

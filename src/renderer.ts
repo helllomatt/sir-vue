@@ -9,6 +9,8 @@ import { resolveFolder, resolveFile, resolvePackageFile } from './dir';
 
 export class Renderer {
     options: ResolvedRendererOptions;
+    defaultFs: FSOptions;
+    moduleCache: { [key: string]: any } = {};
 
     /**
      * Creates a new instance of the renderer and applies any default
@@ -19,8 +21,17 @@ export class Renderer {
         if (!options) {
             throw new Error(`Missing options for the renderer.`);
         }
+
+        this.defaultFs = {
+            exists: fs.existsSync,
+            read: (filePath: string) => fs.readFileSync(filePath, 'utf-8'),
+            write: fs.writeFileSync,
+            mkdir: (dirPath: string) => fs.mkdirSync(dirPath, { recursive: true }),
+            rm: (filePath: string) => fs.rmSync(filePath, { recursive: true }),
+        };
         
         this.options = this.applyDefaultOptions(options);
+
         this.inject();
     }
 
@@ -34,9 +45,9 @@ export class Renderer {
         this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
                 const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, '')); 
-                if (fs.existsSync(bundleFilePath)) {
+                if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'application/javascript');
-                    res.send(fs.readFileSync(bundleFilePath, 'utf-8'));
+                    res.send(this.options.fs.read(bundleFilePath));
                 } else {
                     res.status(404);
                     res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`);
@@ -111,7 +122,7 @@ export class Renderer {
 
         return {
             rendererOptions,
-            inputFile: resolveFile(file, rendererOptions.viewsFolder),
+            inputFile: resolveFile(this.defaultFs, file, rendererOptions.viewsFolder),
             context: context || {}
         } as CompilationOptions;
     }
@@ -170,7 +181,7 @@ export class Renderer {
     async templateEngine(req: express.Request | null, res: express.Response | null, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride) {
         const compilationOptions: CompilationOptions = this.getCompilationOptions(options || { app: this.options.app } as ResolvedRendererOptions, file, context);
         const webpackOptions = this.validateCompilationOptions(compilationOptions);
-        const shouldCompile = !this.options.productionMode || !fs.existsSync(webpackOptions.outputFolder);
+        const shouldCompile = !this.options.productionMode || !this.options.fs.exists(webpackOptions.outputFolder);
         shouldCompile ? await this.compileFile(webpackOptions) : this.validateCompilationOptions(compilationOptions);
 
         if (req !== null && res !== null) {
@@ -192,6 +203,33 @@ export class Renderer {
     }
 
     /**
+     * Creates a node module from string content and returns the module.
+     * This is used to support caching of compiled files.
+     * @param src source content
+     * @param filename require file name
+     * @returns node module
+     */
+    requireFromString(src: string, filename: string) {
+        if (this.moduleCache[filename]) {
+            return this.moduleCache[filename];
+        }
+
+        const Module: any = module.constructor;
+        const paths = Module._nodeModulePaths(path.dirname(filename));
+
+        const parent: any = module.parent;
+        const mod = new Module(filename, parent);
+        mod.filename = filename;
+        mod.paths = [].concat(paths);
+        mod._compile(src, filename);
+
+        const exports = mod.exports;
+        this.moduleCache[filename] = exports;
+
+        return exports;
+    }
+
+    /**
      * Renders the compiled webpack bundle for vue, injecting all of the context data and
      * plugging it into the template to provide full, valid html.
      * @param webpackOptions data coming from a compiled webpack bundle
@@ -199,12 +237,12 @@ export class Renderer {
      * @returns the rendered output as a string
      */
     async renderFile(webpackOptions: WebpackBuilderOptions, compilationOptions: CompilationOptions): Promise<string> {
-        const manifest = require(path.join(webpackOptions.outputFolder, 'vue-ssr-manifest.json'));
+        const manifest = JSON.parse(this.options.fs.read(path.join(webpackOptions.outputFolder, 'vue-ssr-manifest.json')));
         const appPath = path.join(webpackOptions.outputFolder, manifest['main.js']);
-        const createApp = require(appPath).default;
+        const createApp = this.requireFromString(this.options.fs.read(appPath), appPath).default;
         const app = await createApp(compilationOptions.context);
         const appContent = await renderToString(app);
-        const outputFile = fs.readFileSync(path.join(webpackOptions.outputFolder, 'index.html'), 'utf-8');
+        const outputFile = this.options.fs.read(path.join(webpackOptions.outputFolder, 'index.html'));
         return outputFile.replace('/** sir-vue-initial-state **/', `window.__INITIAL_STATE__ = ${jsToString(compilationOptions.context)}`).replace('<!--sir-vue-outlet-->', `<div id='app'>${appContent}</div>`);
     }
 
@@ -241,6 +279,7 @@ export class Renderer {
             html: options.rendererOptions.html,
             productionMode: this.options.productionMode,
             projectDirectory: this.options.projectDirectory,
+            fs: this.options.fs,
         } as WebpackBuilderOptions;
     }
 
@@ -277,10 +316,11 @@ export class Renderer {
      */
     private applyDefaultOptions(options: RendererOptions): ResolvedRendererOptions {
         const projectDirectory = this.resolveProjectDirectory(options.projectDirectory);
+
         return {
             projectDirectory,
-            viewsFolder: resolveFolder(options.viewsFolder || 'views', projectDirectory),
-            outputFolder: resolveFolder(options.outputFolder || 'dist', projectDirectory, true),
+            viewsFolder: resolveFolder(this.defaultFs, options.viewsFolder || 'views', projectDirectory),
+            outputFolder: resolveFolder(this.defaultFs, options.outputFolder || 'dist', projectDirectory, true),
             webpackOverride: options.webpackOverride || false,
             webpack: {
                 client: options.webpack?.client || {},
@@ -288,14 +328,15 @@ export class Renderer {
             } as WebpackOptions,
             publicPrefix: options.publicPrefix || '/public/ssr',
             app: options.app,
-            templateFile: options.templateFile ? resolveFile(options.templateFile, projectDirectory) : resolvePackageFile('build-files/template.html'),
+            templateFile: options.templateFile ? resolveFile(this.defaultFs, options.templateFile, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/template.html'),
             entryFiles: {
-                app: options.entryFiles?.app ? resolveFile(options.entryFiles.app, projectDirectory) : resolvePackageFile('build-files/app.js'),
-                client: options.entryFiles?.client ? resolveFile(options.entryFiles.client, projectDirectory) : resolvePackageFile('build-files/entry-client.js'),
-                server: options.entryFiles?.server ? resolveFile(options.entryFiles.server, projectDirectory) : resolvePackageFile('build-files/entry-server.js')
+                app: options.entryFiles?.app ? resolveFile(this.defaultFs, options.entryFiles.app, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/app.js'),
+                client: options.entryFiles?.client ? resolveFile(this.defaultFs, options.entryFiles.client, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/entry-client.js'),
+                server: options.entryFiles?.server ? resolveFile(this.defaultFs, options.entryFiles.server, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/entry-server.js')
             },
             productionMode: options.productionMode || process.env.NODE_ENV || false,
             html: options.html || {},
+            fs: options.fs || this.defaultFs,
         } as ResolvedRendererOptions;
     }
 
@@ -326,6 +367,7 @@ export interface RendererOptions {
     entryFiles?: EntryFilesOption;
     productionMode?: boolean;
     html?: any;
+    fs?: FSOptions;
 }
 interface ResolvedRendererOptions {
     projectDirectory: string;
@@ -339,6 +381,15 @@ interface ResolvedRendererOptions {
     entryFiles: EntryFiles;
     productionMode: boolean;
     html: any;
+    fs: FSOptions;
+}
+
+export interface FSOptions {
+    exists: (path: string) => boolean;
+    read: (path: string) => string;
+    write: (path: string, content: string) => void;
+    mkdir: (path: string) => void;
+    rm: (path: string) => void;
 }
 
 export interface RendererOptionsOverride {
