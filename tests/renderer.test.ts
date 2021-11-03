@@ -619,4 +619,18 @@ describe('renderer', () => {
         const dom = new JSDOM(req.text);
         expect(dom.window.document.getElementById('custom-stylesheed')).to.not.be.undefined;
     }).timeout(30 * 1000);
+
+    it('should create a module from a string', () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+
+        const moduleSrc = `module.exports = (words) => words + ' abc'`;
+        const module = r.requireFromString(moduleSrc, 'module.js');
+        expect(module('Hello world!')).to.equal('Hello world! abc');
+    })
 });
