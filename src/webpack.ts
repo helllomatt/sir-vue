@@ -21,7 +21,7 @@ export class WebpackBuilder {
         if (this.options.webpackOverride) {
             this.config = {
                 server: (options.custom as WebpackOverrideOptions).server(options, options.html),
-                client: (options.custom as WebpackOverrideOptions).server(options, options.html)
+                client: (options.custom as WebpackOverrideOptions).client(options, options.html)
             }
         } else {
             this.config = {
