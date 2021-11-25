@@ -1,4 +1,4 @@
-import { EntryFiles, FSOptions, WebpackOptions } from "./renderer";
+import { EntryFiles, FSOptions, WebpackOverrideOptions, WebpackCustomOptions } from "./renderer";
 import * as path from 'path';
 import * as fs from 'fs';
 import { Configuration, MultiStats, webpack } from "webpack";
@@ -18,9 +18,16 @@ export class WebpackBuilder {
     constructor(options: WebpackBuilderOptions) {
         this.options = options;
 
-        this.config = {
-            server: this.options.webpackOverride ? this.options.custom.server : require('./build-files/webpack-server')(options.custom.server || {}, options, options.html),
-            client: this.options.webpackOverride ? this.options.custom.client : require('./build-files/webpack-client')(options.custom.client || {}, options, options.html),
+        if (this.options.webpackOverride) {
+            this.config = {
+                server: (options.custom as WebpackOverrideOptions).server(options, options.html),
+                client: (options.custom as WebpackOverrideOptions).server(options, options.html)
+            }
+        } else {
+            this.config = {
+                server: require('./build-files/webpack-server')((options.custom as WebpackCustomOptions).server || {}, options, options.html),
+                client: require('./build-files/webpack-client')((options.custom as WebpackCustomOptions).client || {}, options, options.html)
+            }
         }
     }
 
@@ -132,7 +139,7 @@ export interface WebpackBuilderOptions {
     inputFile: string;
     entryFiles: EntryFiles,
     webpackOverride: boolean,
-    custom: WebpackOptions,
+    custom: WebpackOverrideOptions | WebpackCustomOptions,
     publicPrefix: string;
     templateFile: string;
     html: any;

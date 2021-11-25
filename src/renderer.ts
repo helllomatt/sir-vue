@@ -44,9 +44,22 @@ export class Renderer {
 
         this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, '')); 
+                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
                 if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'application/javascript');
+                    res.send(this.options.fs.read(bundleFilePath));
+                } else {
+                    res.status(404);
+                    res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`);
+                }
+            },
+        );
+
+        this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.css`,
+            (req: express.Request, res: express.Response) => {
+                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
+                if (this.options.fs.exists(bundleFilePath)) {
+                    res.setHeader('Content-Type', 'text/css');
                     res.send(this.options.fs.read(bundleFilePath));
                 } else {
                     res.status(404);
@@ -64,32 +77,78 @@ export class Renderer {
      */
     async prerender(dir?: string): Promise<any[]> {
         const promises: Promise<any>[] = [];
+        this.renderRouteStack(this.options.app._router, dir).forEach(promise => promises.push(promise));
+        return Promise.all(promises);
+    }
 
-        this.options.app._router.stack.forEach(async ({ route }: any) => { 
-            if (route && route.path && route.path.indexOf(this.options.publicPrefix) !== 0) {
-                const re = RegExp('res.vue\\(([^]+\\))', 'gm');
-                let match: RegExpExecArray | null = null;
-                for (const stack of route.stack) {
-                    while ((match = re.exec(stack.handle.toString())) !== null) {
+    /**
+     * Recursively renders the express router stack
+     * @param route route to render
+     * @param dir replacement for __dirname
+     * @returns 
+     */
+    renderRouteStack(route: any, dir?: string): Promise<any>[] {
+        const promises: Promise<any>[] = [];
+        const re = /res.vue\(([^]+\))/gm;
+        let match = null;
+        for (const stack of route.stack) {
+            if (stack.route && stack.route.path && stack.route.path.indexOf(this.options.publicPrefix) === 0) {
+                continue;
+            }
+            
+            if (stack.handle?.stack) {
+                this.renderRouteStack(stack.handle, dir).forEach(promise => promises.push(promise));
+            } else if (stack.route) {
+                stack.route.stack.forEach((layer: any) => {
+                    while ((match = re.exec(layer.handle.toString())) !== null) {
                         if (match.length > 0) {
+                            let renderFunctionString = this.getRenderFunctionString(match[0], dir)
                             // ur mom could be harmful
                             // serious: this should only be eval'd code from the developer. if you are malicious
                             // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
-                            let fnText = match[0].replace(/\s\s+/g, ' ').replace('res.vue(', 'async () => await this.templateEngine(null, null, () => {}, ');
-                            if (dir) {
-                                fnText = fnText.replace(/__dirname/g, JSON.stringify(dir));
-                            } else {
-                                fnText = fnText.replace(/__dirname/g, JSON.stringify(this.options.projectDirectory));
-                            }
-                            const fn = eval(fnText);
+                            const fn = eval(renderFunctionString);
                             promises.push(fn());
                         }
                     }
-                }
+                })
             }
-        });
+        }
 
-       return Promise.all(promises);
+        return promises;
+    }
+
+    /**
+     * Turns a `res.vue` call into a `this.templateEngine` call so that
+     * it can be evaluated from inside this context for prerendering.
+     * @param match matched render function
+     * @param dir replacement for __dirname
+     * @returns 
+     */
+    getRenderFunctionString(match: string, dir?: string): string {
+        let fnText = match.replace(/\s\s+/g, ' ').replace('res.vue(', '(null, null, () => {}, ');
+        if (dir) {
+            fnText = fnText.replace(/__dirname/g, JSON.stringify(dir));
+        } else {
+            fnText = fnText.replace(/__dirname/g, JSON.stringify(this.options.projectDirectory));
+        }
+
+        // now that we have the render function, we need to purge anything that 
+        // isn't needed like the context and render variables
+        const params = fnText.match(/\(null, null, \(\) => {}, ([^)]+)\)/);
+        let basicParams = null;
+        if (params) {
+            const paramString = params[0].substring(1, params[0].length - 1);
+            const paramArray = paramString.split(',');
+            const paramArrayClean = paramArray.map(param => param.replace(/['"]+/g, ''));
+            const paramArrayClean2 = paramArrayClean.map(param => param.trim());
+            if (paramArrayClean2.length > 4) {
+                paramArrayClean2.splice(4);
+            }
+            paramArrayClean2[paramArrayClean2.length - 1] = `'${paramArrayClean2[paramArrayClean2.length - 1]}'`;
+            basicParams = paramArrayClean2.join(', ');
+        }
+
+        return `async () => await this.templateEngine(${basicParams})`
     }
 
     /**
@@ -325,7 +384,7 @@ export class Renderer {
             webpack: {
                 client: options.webpack?.client || {},
                 server: options.webpack?.server || {},
-            } as WebpackOptions,
+            } as WebpackOverrideOptions | WebpackCustomOptions,
             publicPrefix: options.publicPrefix || '/public/ssr',
             app: options.app,
             templateFile: options.templateFile ? resolveFile(this.defaultFs, options.templateFile, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/template.html'),
@@ -360,7 +419,7 @@ export interface RendererOptions {
     viewsFolder?: string;
     outputFolder?: string;
     webpackOverride?: boolean;
-    webpack?: WebpackOptions;
+    webpack?: WebpackOverrideOptions | WebpackCustomOptions;
     publicPrefix?: string;
     app: express.Application;
     templateFile?: string;
@@ -374,7 +433,7 @@ interface ResolvedRendererOptions {
     viewsFolder: string;
     outputFolder: string;
     webpackOverride: boolean;
-    webpack: WebpackOptions;
+    webpack: WebpackOverrideOptions | WebpackCustomOptions;
     publicPrefix: string;
     app: express.Application;
     templateFile: string;
@@ -409,7 +468,12 @@ export interface CompilationOptions {
     context: any;
 }
 
-export interface WebpackOptions {
+export interface WebpackOverrideOptions {
+    client: (options: WebpackBuilderOptions, html: any) => webpackConfiguration;
+    server: (options: WebpackBuilderOptions, html: any) => webpackConfiguration;
+}
+
+export interface WebpackCustomOptions {
     client: webpackConfiguration;
     server: webpackConfiguration;
 }

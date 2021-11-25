@@ -413,19 +413,32 @@ describe('renderer', () => {
         app.get('/', (req: express.Request, res: express.Response, next: express.NextFunction) => {
             res.vue('Test.vue', {}, {});
         });
-        app.get('/another', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+
+        const innerRoute = express.Router();
+        innerRoute.get('/another', (req: express.Request, res: express.Response, next: express.NextFunction) => {
             res.vue('AnotherTest.vue', {}, {});
-        });
+        })
+        app.use('/inner', innerRoute);
+
+        const innerInnerRoute = express.Router();
+        innerInnerRoute.get('/yetanother', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Greeting.vue', {}, {});
+        })
+        innerRoute.use('/inner', innerInnerRoute);
 
         await r.prerender();
 
         const outputTestFolder = path.join(__dirname, 'dist/views/Test')
         const testFolderExists = fs.existsSync(outputTestFolder);
-        expect(testFolderExists).to.be.true;;
+        expect(testFolderExists).to.be.true;
 
-        const outputAnotherFolder = path.join(__dirname, 'dist/views/Test')
+        const outputAnotherFolder = path.join(__dirname, 'dist/views/AnotherTest')
         const anotherFolderExists = fs.existsSync(outputAnotherFolder);
         expect(anotherFolderExists).to.be.true;
+
+        const outputGreetingFolder = path.join(__dirname, 'dist/views/Greeting')
+        const greetingFolderExists = fs.existsSync(outputGreetingFolder);
+        expect(greetingFolderExists).to.be.true;
     }).timeout(30 * 1000);
 
     it('should render a prerendered bundle/file', async () => {
