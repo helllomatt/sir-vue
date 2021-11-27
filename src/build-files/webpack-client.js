@@ -20,7 +20,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
     })({
         entry: 'entry-client.js',
         mode: options.productionMode ? 'production' : 'development',
-        devtool: 'source-map',
+        devtool: options.productionMode ? 'production' : 'development',
         output: {
             filename: 'bundle-client.[contenthash].js',
             publicPath: '/',
@@ -75,6 +75,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
         plugins: [
             new VueLoaderPlugin(),
             new webpack.DefinePlugin({
+                __VUE_OPTIONS_API__: true,
                 __VUE_PROD_DEVTOOLS__: !options.productionMode,
             }),
             new webpack.optimize.LimitChunkCountPlugin({

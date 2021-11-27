@@ -67,6 +67,21 @@ export class Renderer {
                 }
             },
         );
+
+        if (!this.options.productionMode) {
+            this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.(js|css).map`,
+                (req: express.Request, res: express.Response) => {
+                    const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
+                    if (this.options.fs.exists(bundleFilePath)) {
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(this.options.fs.read(bundleFilePath));
+                    } else {
+                        res.status(404);
+                        res.send(`Couldn't find the source map file. Is the output folder correct? Is everything compiling?`);
+                    }
+                },
+            );
+        }
     }
 
     /**

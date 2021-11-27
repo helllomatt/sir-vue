@@ -6,4 +6,4 @@ if (window.__INITIAL_STATE__) {
 import { createApp } from './app';
 const { app } = createApp(context);
 
-app.mount('#app');
+app.mount('#app', true);
