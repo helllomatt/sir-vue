@@ -20,7 +20,7 @@ module.exports = (defaultOptions, options, htmlOptions = {}) => {
     })({
         entry: 'entry-client.js',
         mode: options.productionMode ? 'production' : 'development',
-        devtool: options.productionMode ? 'production' : 'development',
+        devtool: options.productionMode ? false : 'source-map',
         output: {
             filename: 'bundle-client.[contenthash].js',
             publicPath: '/',
