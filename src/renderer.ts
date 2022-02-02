@@ -103,9 +103,7 @@ export class Renderer {
      * @returns 
      */
     renderRouteStack(route: any, dir?: string): Promise<any>[] {
-        const promises: Promise<any>[] = [];
-        const re = /res.vue\(([^]+\))/gm;
-        let match = null;
+        let promises: Promise<any>[] = [];
         for (const stack of route.stack) {
             if (stack.route && stack.route.path && stack.route.path.indexOf(this.options.publicPrefix) === 0) {
                 continue;
@@ -115,17 +113,34 @@ export class Renderer {
                 this.renderRouteStack(stack.handle, dir).forEach(promise => promises.push(promise));
             } else if (stack.route) {
                 stack.route.stack.forEach((layer: any) => {
-                    while ((match = re.exec(layer.handle.toString())) !== null) {
-                        if (match.length > 0) {
-                            let renderFunctionString = this.getRenderFunctionString(match[0], dir)
-                            // ur mom could be harmful
-                            // serious: this should only be eval'd code from the developer. if you are malicious
-                            // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
-                            const fn = eval(renderFunctionString);
-                            promises.push(fn());
-                        }
-                    }
+                    promises = [].concat(promises as [], this.evaluateRenderFunction(layer.handle, dir) as []);
                 })
+            } else if (stack.handle) {
+                promises = [].concat(promises as [], this.evaluateRenderFunction(stack.handle, dir) as []);
+            }
+        }
+
+        return promises;
+    }
+
+    /**
+     * Evaluates any found `res.vue` functions and renders them
+     * @param handle express handle function
+     * @param dir replacement for __dirname
+     * @returns
+     */
+    evaluateRenderFunction(handle: any, dir?: string): Promise<any>[] {
+        let promises: Promise<any>[] = [];
+        const re = /res.vue\(([^]+\))/gm;
+        let match = null;
+        while ((match = re.exec(handle.toString())) !== null) {
+            if (match.length > 0) {
+                let renderFunctionString = this.getRenderFunctionString(match[0], dir)
+                // ur mom could be harmful
+                // serious: this should only be eval'd code from the developer. if you are malicious
+                // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
+                const fn = eval(renderFunctionString);
+                promises.push(fn());
             }
         }
 
