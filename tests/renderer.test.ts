@@ -646,4 +646,18 @@ describe('renderer', () => {
         const module = r.requireFromString(moduleSrc, 'module.js');
         expect(module('Hello world!')).to.equal('Hello world! abc');
     })
+
+    it('should encrypt/decrypt a string', () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+        };
+
+        const r = new Renderer(options);
+
+        const obfuscated = r.obfuscate('Hello world!');
+        expect(obfuscated).to.not.equal('Hello world!');
+        expect(r.clarify(obfuscated)).to.equal('Hello world!');
+    })
 });
