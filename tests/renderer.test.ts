@@ -426,6 +426,10 @@ describe('renderer', () => {
         })
         innerRoute.use('/inner', innerInnerRoute);
 
+        app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+            res.vue('Error.vue', {}, {});
+        });
+
         await r.prerender();
 
         const outputTestFolder = path.join(__dirname, 'dist/views/Test')
@@ -439,6 +443,10 @@ describe('renderer', () => {
         const outputGreetingFolder = path.join(__dirname, 'dist/views/Greeting')
         const greetingFolderExists = fs.existsSync(outputGreetingFolder);
         expect(greetingFolderExists).to.be.true;
+
+        const outputErrorFolder = path.join(__dirname, 'dist/views/Error')
+        const errorFolderExists = fs.existsSync(outputErrorFolder);
+        expect(errorFolderExists).to.be.true;
     }).timeout(30 * 1000);
 
     it('should render a prerendered bundle/file', async () => {
