@@ -1,14 +1,16 @@
 <!DOCTYPE html>
-<html lang='<%= htmlWebpackPlugin.options.lang %>'>
+<html lang="<%= htmlWebpackPlugin.options.lang %>">
     <head>
-        <script>window.__INITIAL_STATE__ = 0/** vue-ssr-initial-state **/</script>
-        <meta charset='utf-8'>
-        <meta name='viewport' content='width=device-width,initial-scale=1.0'>
+        <script>
+            window.__INITIAL_STATE__ = 0 /** vue-ssr-initial-state **/
+        </script>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
         <title><%= htmlWebpackPlugin.options.title %></title>
         <%= htmlWebpackPlugin.options.custom %>
     </head>
 
     <body>
-        <div id='app'><!--vue-ssr-outlet--></div>
+        <div id="app"><!--vue-ssr-outlet--></div>
     </body>
 </html>

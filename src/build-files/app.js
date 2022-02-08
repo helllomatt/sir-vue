@@ -1,7 +1,7 @@
-import { createSSRApp, h } from 'vue';
-import App from '{{vue-render-file}}';
+import { createSSRApp, h } from 'vue'
+import App from '{{vue-render-file}}'
 
 export function createApp(data = {}) {
-    const app = createSSRApp(App, data);
-    return { app };
+    const app = createSSRApp(App, data)
+    return { app }
 }

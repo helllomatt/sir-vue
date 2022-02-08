@@ -1,6 +1,6 @@
-import { createApp } from './app';
+import { createApp } from './app'
 
 export default async (context) => {
-    const { app } = createApp(context);
-    return app;
-};
+    const { app } = createApp(context)
+    return app
+}

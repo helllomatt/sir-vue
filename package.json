@@ -1,6 +1,6 @@
 {
     "name": "sir-vue",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "description": "Customizable SSR rendering library for Vue and Express",
     "homepage": "https://github.com/helllomatt/sir-vue",
     "bugs": {
@@ -10,7 +10,6 @@
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
     "scripts": {
-        "prepare": "npm run build",
         "build": "tsc && copyfiles -u 1 -a ./src/build-files/* ./lib",
         "test": "mocha -r ts-node/register ./**/*.test.ts",
         "test:coverage": "nyc npm run test"
@@ -47,9 +46,12 @@
         "copyfiles": "^2.4.1",
         "crossenv": "0.0.2-security",
         "eslint": "^7.32.0",
+        "husky": "^7.0.0",
         "jsdom": "^17.0.0",
+        "lint-staged": "^12.3.3",
         "mocha": "^9.1.1",
         "nyc": "^15.1.0",
+        "prettier": "^2.5.1",
         "supertest": "^6.1.6",
         "ts-node": "^10.2.1",
         "typescript": "^4.4.2"
@@ -72,5 +74,8 @@
         "webpack-manifest-plugin": "^4.0.2",
         "webpack-merge": "^5.8.0",
         "webpack-node-externals": "^3.0.0"
+    },
+    "lint-staged": {
+        "**/*": "prettier --write --ignore-unknown"
     }
 }
