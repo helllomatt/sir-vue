@@ -1,14 +1,14 @@
 <template>
-    <div id='test-parent'>Hello, world I'm a parent!</div>
+    <div id="test-parent">Hello, world I'm a parent!</div>
     <Greeting />
 </template>
 
 <script>
-import Greeting from './Greeting';
+import Greeting from './Greeting'
 
 export default {
     components: {
-        Greeting
-    }
+        Greeting,
+    },
 }
 </script>

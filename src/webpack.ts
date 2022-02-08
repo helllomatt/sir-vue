@@ -1,13 +1,13 @@
-import { EntryFiles, FSOptions, WebpackOverrideOptions, WebpackCustomOptions } from "./renderer";
-import * as path from 'path';
-import * as fs from 'fs';
-import { Configuration, MultiStats, webpack } from "webpack";
-import { merge } from 'webpack-merge';
+import { EntryFiles, FSOptions, WebpackOverrideOptions, WebpackCustomOptions } from './renderer'
+import * as path from 'path'
+import * as fs from 'fs'
+import { Configuration, MultiStats, webpack } from 'webpack'
+import { merge } from 'webpack-merge'
 
 export class WebpackBuilder {
-    options: WebpackBuilderOptions;
+    options: WebpackBuilderOptions
     config: {
-        server: Configuration,
+        server: Configuration
         client: Configuration
     }
 
@@ -16,17 +16,25 @@ export class WebpackBuilder {
      * @param options webpack builder options
      */
     constructor(options: WebpackBuilderOptions) {
-        this.options = options;
+        this.options = options
 
         if (this.options.webpackOverride) {
             this.config = {
                 server: (options.custom as WebpackOverrideOptions).server(options, options.html),
-                client: (options.custom as WebpackOverrideOptions).client(options, options.html)
+                client: (options.custom as WebpackOverrideOptions).client(options, options.html),
             }
         } else {
             this.config = {
-                server: require('./build-files/webpack-server')((options.custom as WebpackCustomOptions).server || {}, options, options.html),
-                client: require('./build-files/webpack-client')((options.custom as WebpackCustomOptions).client || {}, options, options.html)
+                server: require('./build-files/webpack-server')(
+                    (options.custom as WebpackCustomOptions).server || {},
+                    options,
+                    options.html
+                ),
+                client: require('./build-files/webpack-client')(
+                    (options.custom as WebpackCustomOptions).client || {},
+                    options,
+                    options.html
+                ),
             }
         }
     }
@@ -40,49 +48,53 @@ export class WebpackBuilder {
         // we want the latest version of everything, so delete all prior to get the
         // latest
         if (this.options.fs.exists(this.options.outputFolder) && !this.options.productionMode) {
-            this.options.fs.rm(this.options.outputFolder);
+            this.options.fs.rm(this.options.outputFolder)
         }
 
-        this.options.fs.mkdir(this.options.outputFolder);
+        this.options.fs.mkdir(this.options.outputFolder)
 
-        const serverEntryFile = path.basename(this.options.entryFiles.server);
-        const clientEntryFile = path.basename(this.options.entryFiles.client);
+        const serverEntryFile = path.basename(this.options.entryFiles.server)
+        const clientEntryFile = path.basename(this.options.entryFiles.client)
 
         // output paths for server/client entry files
         const outputPaths = {
             app: path.join(this.options.outputFolder, 'app.js'),
             server: path.join(this.options.outputFolder, serverEntryFile),
-            client: path.join(this.options.outputFolder, clientEntryFile)
-        };
+            client: path.join(this.options.outputFolder, clientEntryFile),
+        }
 
         // input paths either from the user-defined or default
         const inputPaths = {
             app: this.options.entryFiles.app,
             server: this.options.entryFiles.server,
-            client: this.options.entryFiles.client
-        };
+            client: this.options.entryFiles.client,
+        }
 
         // copy server/client entry files to output location with proper information replaced
-        this.options.fs.write(outputPaths.app, fs.readFileSync(inputPaths.app, 'utf-8')
-            .replace(`'{{vue-render-file}}'`, JSON.stringify(this.options.inputFile))
-            .replace(`{{root}}`, JSON.stringify(this.options.projectDirectory).replace(/['"]+/g, '')));
-        this.options.fs.write(outputPaths.server, fs.readFileSync(inputPaths.server, 'utf-8'));
-        this.options.fs.write(outputPaths.client, fs.readFileSync(inputPaths.client, 'utf-8'));
+        this.options.fs.write(
+            outputPaths.app,
+            fs
+                .readFileSync(inputPaths.app, 'utf-8')
+                .replace(`'{{vue-render-file}}'`, JSON.stringify(this.options.inputFile))
+                .replace(`{{root}}`, JSON.stringify(this.options.projectDirectory).replace(/['"]+/g, ''))
+        )
+        this.options.fs.write(outputPaths.server, fs.readFileSync(inputPaths.server, 'utf-8'))
+        this.options.fs.write(outputPaths.client, fs.readFileSync(inputPaths.client, 'utf-8'))
 
         const serverConfig = merge(Object.assign({}, this.config.server), {
             entry: outputPaths.server,
             output: {
-                path: this.options.outputFolder
-            }
-        });
+                path: this.options.outputFolder,
+            },
+        })
         const clientConfig = merge(Object.assign({}, this.config.client), {
             entry: outputPaths.client,
             output: {
-                path: this.options.outputFolder
-            }
-        });
+                path: this.options.outputFolder,
+            },
+        })
 
-        return [serverConfig, clientConfig];
+        return [serverConfig, clientConfig]
     }
 
     /**
@@ -94,21 +106,21 @@ export class WebpackBuilder {
      */
     hasErrors(err?: Error, stats?: MultiStats): string[] {
         if (err) {
-            return [err.message];
+            return [err.message]
         } else {
-            const errors: string[] = [];
+            const errors: string[] = []
 
             if (stats) {
                 if (stats.stats) {
-                    stats.stats.forEach(stat => {
+                    stats.stats.forEach((stat) => {
                         if (stat.hasErrors()) {
-                            stat.compilation.errors.forEach(i => errors.push(i.message));
+                            stat.compilation.errors.forEach((i) => errors.push(i.message))
                         }
-                    });
+                    })
                 }
             }
-            
-            return errors;
+
+            return errors
         }
     }
 
@@ -118,32 +130,32 @@ export class WebpackBuilder {
      * @returns webpack build promise results
      */
     build() {
-        const config = this.getConfig();
-        const compiler = webpack(config);
+        const config = this.getConfig()
+        const compiler = webpack(config)
         return new Promise((resolve, reject) => {
             compiler.run((err, stats) => {
-                const errors = this.hasErrors(err, stats);
+                const errors = this.hasErrors(err, stats)
                 if (errors.length > 0) {
-                    console.log(errors);
-                    reject(`Webpack failed to compile.`);
+                    console.log(errors)
+                    reject(`Webpack failed to compile.`)
                 } else {
-                    resolve(0);
+                    resolve(0)
                 }
-            });
-        });
+            })
+        })
     }
-};
+}
 
 export interface WebpackBuilderOptions {
-    outputFolder: string;
-    inputFile: string;
-    entryFiles: EntryFiles,
-    webpackOverride: boolean,
-    custom: WebpackOverrideOptions | WebpackCustomOptions,
-    publicPrefix: string;
-    templateFile: string;
-    html: any;
-    productionMode: boolean;
-    projectDirectory: string;
-    fs: FSOptions;
+    outputFolder: string
+    inputFile: string
+    entryFiles: EntryFiles
+    webpackOverride: boolean
+    custom: WebpackOverrideOptions | WebpackCustomOptions
+    publicPrefix: string
+    templateFile: string
+    html: any
+    productionMode: boolean
+    projectDirectory: string
+    fs: FSOptions
 }

@@ -1,17 +1,17 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import * as crypto from 'crypto';
-import * as express from 'express';
-import { Configuration as webpackConfiguration, webpack } from 'webpack';
-import { WebpackBuilder, WebpackBuilderOptions } from './webpack';
-import { renderToString } from '@vue/server-renderer';
-const jsToString = require('js-to-string');
-import { resolveFolder, resolveFile, resolvePackageFile } from './dir';
+import * as path from 'path'
+import * as fs from 'fs'
+import * as crypto from 'crypto'
+import * as express from 'express'
+import { Configuration as webpackConfiguration, webpack } from 'webpack'
+import { WebpackBuilder, WebpackBuilderOptions } from './webpack'
+import { renderToString } from '@vue/server-renderer'
+const jsToString = require('js-to-string')
+import { resolveFolder, resolveFile, resolvePackageFile } from './dir'
 
 export class Renderer {
-    options: ResolvedRendererOptions;
-    defaultFs: FSOptions;
-    moduleCache: { [key: string]: any } = {};
+    options: ResolvedRendererOptions
+    defaultFs: FSOptions
+    moduleCache: { [key: string]: any } = {}
 
     /**
      * Creates a new instance of the renderer and applies any default
@@ -20,7 +20,7 @@ export class Renderer {
      */
     constructor(options?: RendererOptions) {
         if (!options) {
-            throw new Error(`Missing options for the renderer.`);
+            throw new Error(`Missing options for the renderer.`)
         }
 
         this.defaultFs = {
@@ -29,11 +29,11 @@ export class Renderer {
             write: fs.writeFileSync,
             mkdir: (dirPath: string) => fs.mkdirSync(dirPath, { recursive: true }),
             rm: (filePath: string) => fs.rmSync(filePath, { recursive: true }),
-        };
-        
-        this.options = this.applyDefaultOptions(options);
+        }
 
-        this.inject();
+        this.options = this.applyDefaultOptions(options)
+
+        this.inject()
     }
 
     /**
@@ -41,62 +41,67 @@ export class Renderer {
      * Also creates the routes for sending out the compiled bundle files
      */
     inject() {
-        this.options.app.use(this.engine());
+        this.options.app.use(this.engine())
 
-        this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.js`,
+        this.options.app.get(
+            `${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
+                const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
                 if (this.options.fs.exists(bundleFilePath)) {
-                    res.setHeader('Content-Type', 'application/javascript');
-                    res.send(this.options.fs.read(bundleFilePath));
+                    res.setHeader('Content-Type', 'application/javascript')
+                    res.send(this.options.fs.read(bundleFilePath))
                 } else {
-                    res.status(404);
-                    res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`);
+                    res.status(404)
+                    res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`)
                 }
-            },
-        );
+            }
+        )
 
-        this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.css`,
+        this.options.app.get(
+            `${this.options.publicPrefix}/*/bundle-client.*.css`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
+                const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
                 if (this.options.fs.exists(bundleFilePath)) {
-                    res.setHeader('Content-Type', 'text/css');
-                    res.send(this.options.fs.read(bundleFilePath));
+                    res.setHeader('Content-Type', 'text/css')
+                    res.send(this.options.fs.read(bundleFilePath))
                 } else {
-                    res.status(404);
-                    res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`);
+                    res.status(404)
+                    res.send(`Couldn't find the bundle file. Is the output folder correct? Is everything compiling?`)
                 }
-            },
-        );
+            }
+        )
 
         if (!this.options.productionMode) {
-            this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.(js|css).map`,
+            this.options.app.get(
+                `${this.options.publicPrefix}/*/bundle-client.*.(js|css).map`,
                 (req: express.Request, res: express.Response) => {
-                    const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
+                    const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
                     if (this.options.fs.exists(bundleFilePath)) {
-                        res.setHeader('Content-Type', 'application/json');
-                        res.send(this.options.fs.read(bundleFilePath));
+                        res.setHeader('Content-Type', 'application/json')
+                        res.send(this.options.fs.read(bundleFilePath))
                     } else {
-                        res.status(404);
-                        res.send(`Couldn't find the source map file. Is the output folder correct? Is everything compiling?`);
+                        res.status(404)
+                        res.send(
+                            `Couldn't find the source map file. Is the output folder correct? Is everything compiling?`
+                        )
                     }
-                },
-            );
+                }
+            )
         }
     }
 
     /**
      * Takes an obfuscated request path and turns it into the path to the
      * bundle file.
-     * 
+     *
      * e.g. /public/ssr/ansopdfkjnapwoienfklqwjerj-asiudfnq;weornq;wr/bundle.client.js -> /public/ssr/views/Index/bundle.client.js
      * @param requestPath request path
      * @returns bundle file path
      */
     getBundleFilePathFromRequst(requestPath: string): string {
-        const requestPathParts = requestPath.replace(this.options.publicPrefix, '').split('/');
-        const bundlePath = this.clarify(requestPathParts[1]);
-        return path.join(this.options.outputFolder, bundlePath, requestPathParts.slice(2).join('/'));
+        const requestPathParts = requestPath.replace(this.options.publicPrefix, '').split('/')
+        const bundlePath = this.clarify(requestPathParts[1])
+        return path.join(this.options.outputFolder, bundlePath, requestPathParts.slice(2).join('/'))
     }
 
     /**
@@ -106,36 +111,36 @@ export class Renderer {
      * @returns promise that everything compiled
      */
     async prerender(dir?: string): Promise<any[]> {
-        const promises: Promise<any>[] = [];
-        this.renderRouteStack(this.options.app._router, dir).forEach(promise => promises.push(promise));
-        return Promise.all(promises);
+        const promises: Promise<any>[] = []
+        this.renderRouteStack(this.options.app._router, dir).forEach((promise) => promises.push(promise))
+        return Promise.all(promises)
     }
 
     /**
      * Recursively renders the express router stack
      * @param route route to render
      * @param dir replacement for __dirname
-     * @returns 
+     * @returns
      */
     renderRouteStack(route: any, dir?: string): Promise<any>[] {
-        let promises: Promise<any>[] = [];
+        let promises: Promise<any>[] = []
         for (const stack of route.stack) {
             if (stack.route && stack.route.path && stack.route.path.indexOf(this.options.publicPrefix) === 0) {
-                continue;
+                continue
             }
-            
+
             if (stack.handle?.stack) {
-                this.renderRouteStack(stack.handle, dir).forEach(promise => promises.push(promise));
+                this.renderRouteStack(stack.handle, dir).forEach((promise) => promises.push(promise))
             } else if (stack.route) {
                 stack.route.stack.forEach((layer: any) => {
-                    promises = [].concat(promises as [], this.evaluateRenderFunction(layer.handle, dir) as []);
+                    promises = [].concat(promises as [], this.evaluateRenderFunction(layer.handle, dir) as [])
                 })
             } else if (stack.handle) {
-                promises = [].concat(promises as [], this.evaluateRenderFunction(stack.handle, dir) as []);
+                promises = [].concat(promises as [], this.evaluateRenderFunction(stack.handle, dir) as [])
             }
         }
 
-        return promises;
+        return promises
     }
 
     /**
@@ -145,21 +150,21 @@ export class Renderer {
      * @returns
      */
     evaluateRenderFunction(handle: any, dir?: string): Promise<any>[] {
-        let promises: Promise<any>[] = [];
-        const re = /res.vue\(([^]+\))/gm;
-        let match = null;
+        let promises: Promise<any>[] = []
+        const re = /res.vue\(([^]+\))/gm
+        let match = null
         while ((match = re.exec(handle.toString())) !== null) {
             if (match.length > 0) {
                 let renderFunctionString = this.getRenderFunctionString(match[0], dir)
                 // ur mom could be harmful
                 // serious: this should only be eval'd code from the developer. if you are malicious
                 // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
-                const fn = eval(renderFunctionString);
-                promises.push(fn());
+                const fn = eval(renderFunctionString)
+                promises.push(fn())
             }
         }
 
-        return promises;
+        return promises
     }
 
     /**
@@ -167,30 +172,30 @@ export class Renderer {
      * it can be evaluated from inside this context for prerendering.
      * @param match matched render function
      * @param dir replacement for __dirname
-     * @returns 
+     * @returns
      */
     getRenderFunctionString(match: string, dir?: string): string {
-        let fnText = match.replace(/\s\s+/g, ' ').replace('res.vue(', '(null, null, () => {}, ');
+        let fnText = match.replace(/\s\s+/g, ' ').replace('res.vue(', '(null, null, () => {}, ')
         if (dir) {
-            fnText = fnText.replace(/__dirname/g, JSON.stringify(dir));
+            fnText = fnText.replace(/__dirname/g, JSON.stringify(dir))
         } else {
-            fnText = fnText.replace(/__dirname/g, JSON.stringify(this.options.projectDirectory));
+            fnText = fnText.replace(/__dirname/g, JSON.stringify(this.options.projectDirectory))
         }
 
-        // now that we have the render function, we need to purge anything that 
+        // now that we have the render function, we need to purge anything that
         // isn't needed like the context and render variables
-        const params = fnText.match(/\(null, null, \(\) => {}, ([^)]+)\)/);
-        let basicParams = null;
+        const params = fnText.match(/\(null, null, \(\) => {}, ([^)]+)\)/)
+        let basicParams = null
         if (params) {
-            const paramString = params[0].substring(1, params[0].length - 1);
-            const paramArray = paramString.split(',');
-            const paramArrayClean = paramArray.map(param => param.replace(/['"]+/g, ''));
-            const paramArrayClean2 = paramArrayClean.map(param => param.trim());
+            const paramString = params[0].substring(1, params[0].length - 1)
+            const paramArray = paramString.split(',')
+            const paramArrayClean = paramArray.map((param) => param.replace(/['"]+/g, ''))
+            const paramArrayClean2 = paramArrayClean.map((param) => param.trim())
             if (paramArrayClean2.length > 4) {
-                paramArrayClean2.splice(4);
+                paramArrayClean2.splice(4)
             }
-            paramArrayClean2[paramArrayClean2.length - 1] = `'${paramArrayClean2[paramArrayClean2.length - 1]}'`;
-            basicParams = paramArrayClean2.join(', ');
+            paramArrayClean2[paramArrayClean2.length - 1] = `'${paramArrayClean2[paramArrayClean2.length - 1]}'`
+            basicParams = paramArrayClean2.join(', ')
         }
 
         return `async () => await this.templateEngine(${basicParams})`
@@ -201,12 +206,12 @@ export class Renderer {
      * @returns express middleware
      */
     engine(): express.RequestHandler {
-        const self = this;
+        const self = this
         return function SirVueRenderer(req: express.Request, res: any, next: express.NextFunction) {
-            res.vue = self.templateEngine.bind(self, req, res, next);
-            res.vueConfig = self.templateEngineConfig.bind(self, req, res, next);
-            return next();
-        }.bind(this);
+            res.vue = self.templateEngine.bind(self, req, res, next)
+            res.vueConfig = self.templateEngineConfig.bind(self, req, res, next)
+            return next()
+        }.bind(this)
     }
 
     /**
@@ -217,43 +222,46 @@ export class Renderer {
      * @returns compilation options
      */
     getCompilationOptions(overrideOptions: RendererOptionsOverride, file: string, context: any): CompilationOptions {
-        const rendererOptions = this.applyDefaultOptions({ ...this.options, ...(overrideOptions || {}) });
+        const rendererOptions = this.applyDefaultOptions({ ...this.options, ...(overrideOptions || {}) })
 
-        let title = this.getTitle(overrideOptions);
+        let title = this.getTitle(overrideOptions)
         if (rendererOptions.html) {
-            rendererOptions.html.title = title ? title : path.basename(file);
+            rendererOptions.html.title = title ? title : path.basename(file)
         }
 
         return {
             rendererOptions,
             inputFile: resolveFile(this.defaultFs, file, rendererOptions.viewsFolder),
-            context: context || {}
-        } as CompilationOptions;
+            context: context || {},
+        } as CompilationOptions
     }
 
     /**
-     * Figures out the title of the page based on the special `title` function in the 
-     * rendere title callback. If no callback was defined, then the title defined 
+     * Figures out the title of the page based on the special `title` function in the
+     * rendere title callback. If no callback was defined, then the title defined
      * on the request is given. If nothing ever was defined ever, then the default
      * HtmlWebpackPlugin title takes effect.
      * @param overrideOptions options provded to override
      * @returns title of the page
      */
     getTitle(overrideOptions: RendererOptionsOverride): string | null {
-        let title: string | null = null;
+        let title: string | null = null
         if (this.options.html && this.options.html.title) {
             if (typeof this.options.html.title === 'function') {
-                title = overrideOptions.html && overrideOptions.html.title ? this.options.html.title(overrideOptions.html.title) : this.options.html.title();
+                title =
+                    overrideOptions.html && overrideOptions.html.title
+                        ? this.options.html.title(overrideOptions.html.title)
+                        : this.options.html.title()
             } else if (typeof this.options.html.title === 'string') {
-                title = this.options.html.title;
+                title = this.options.html.title
             }
         } else if (overrideOptions && overrideOptions.html && overrideOptions.html.title) {
-            title = overrideOptions.html.title;
+            title = overrideOptions.html.title
         }
 
-        return title;
+        return title
     }
-    
+
     /**
      * Returns just the compilation options for when calling the function through
      * an express request. This should mainly be called for debugging purposes to see
@@ -266,9 +274,19 @@ export class Renderer {
      * @param options override options
      * @returns compilation options
      */
-    templateEngineConfig(req: express.Request, res: express.Response, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride): CompilationOptions {
-        return this.getCompilationOptions(this.applyDefaultOptions({ ...this.options, ...(options || { } as ResolvedRendererOptions)}), file, context);
-        
+    templateEngineConfig(
+        req: express.Request,
+        res: express.Response,
+        next: express.NextFunction,
+        file: string,
+        context?: any,
+        options?: RendererOptionsOverride
+    ): CompilationOptions {
+        return this.getCompilationOptions(
+            this.applyDefaultOptions({ ...this.options, ...(options || ({} as ResolvedRendererOptions)) }),
+            file,
+            context
+        )
     }
 
     /**
@@ -282,15 +300,26 @@ export class Renderer {
      * @param context context data
      * @param options override option
      */
-    async templateEngine(req: express.Request | null, res: express.Response | null, next: express.NextFunction, file: string, context?: any, options?: RendererOptionsOverride) {
-        const compilationOptions: CompilationOptions = this.getCompilationOptions(options || { app: this.options.app } as ResolvedRendererOptions, file, context);
-        const webpackOptions = this.validateCompilationOptions(compilationOptions);
-        const shouldCompile = !this.options.productionMode || !this.options.fs.exists(webpackOptions.outputFolder);
-        shouldCompile ? await this.compileFile(webpackOptions) : this.validateCompilationOptions(compilationOptions);
+    async templateEngine(
+        req: express.Request | null,
+        res: express.Response | null,
+        next: express.NextFunction,
+        file: string,
+        context?: any,
+        options?: RendererOptionsOverride
+    ) {
+        const compilationOptions: CompilationOptions = this.getCompilationOptions(
+            options || ({ app: this.options.app } as ResolvedRendererOptions),
+            file,
+            context
+        )
+        const webpackOptions = this.validateCompilationOptions(compilationOptions)
+        const shouldCompile = !this.options.productionMode || !this.options.fs.exists(webpackOptions.outputFolder)
+        shouldCompile ? await this.compileFile(webpackOptions) : this.validateCompilationOptions(compilationOptions)
 
         if (req !== null && res !== null) {
-            const renderedFile = await this.renderFile(webpackOptions, compilationOptions);
-            this.sendFile(req, res, next, renderedFile);
+            const renderedFile = await this.renderFile(webpackOptions, compilationOptions)
+            this.sendFile(req, res, next, renderedFile)
         }
     }
 
@@ -301,9 +330,9 @@ export class Renderer {
      * @returns options used to compile webpack
      */
     async compileFile(webpackOptions: WebpackBuilderOptions): Promise<WebpackBuilderOptions> {
-        const webpackBuilder = new WebpackBuilder(webpackOptions);
-        await webpackBuilder.build();
-        return webpackOptions;
+        const webpackBuilder = new WebpackBuilder(webpackOptions)
+        await webpackBuilder.build()
+        return webpackOptions
     }
 
     /**
@@ -315,22 +344,22 @@ export class Renderer {
      */
     requireFromString(src: string, filename: string) {
         if (this.moduleCache[filename]) {
-            return this.moduleCache[filename];
+            return this.moduleCache[filename]
         }
 
-        const Module: any = module.constructor;
-        const paths = Module._nodeModulePaths(path.dirname(filename));
+        const Module: any = module.constructor
+        const paths = Module._nodeModulePaths(path.dirname(filename))
 
-        const parent: any = module.parent;
-        const mod = new Module(filename, parent);
-        mod.filename = filename;
-        mod.paths = [].concat(paths);
-        mod._compile(src, filename);
+        const parent: any = module.parent
+        const mod = new Module(filename, parent)
+        mod.filename = filename
+        mod.paths = [].concat(paths)
+        mod._compile(src, filename)
 
-        const exports = mod.exports;
-        this.moduleCache[filename] = exports;
+        const exports = mod.exports
+        this.moduleCache[filename] = exports
 
-        return exports;
+        return exports
     }
 
     /**
@@ -341,13 +370,20 @@ export class Renderer {
      * @returns the rendered output as a string
      */
     async renderFile(webpackOptions: WebpackBuilderOptions, compilationOptions: CompilationOptions): Promise<string> {
-        const manifest = JSON.parse(this.options.fs.read(path.join(webpackOptions.outputFolder, 'vue-ssr-manifest.json')));
-        const appPath = path.join(webpackOptions.outputFolder, manifest['main.js']);
-        const createApp = this.requireFromString(this.options.fs.read(appPath), appPath).default;
-        const app = await createApp(compilationOptions.context);
-        const appContent = await renderToString(app);
-        const outputFile = this.options.fs.read(path.join(webpackOptions.outputFolder, 'index.html'));
-        return outputFile.replace('/** sir-vue-initial-state **/', `window.__INITIAL_STATE__ = ${jsToString(compilationOptions.context)}`).replace('<!--sir-vue-outlet-->', `<div id='app'>${appContent}</div>`);
+        const manifest = JSON.parse(
+            this.options.fs.read(path.join(webpackOptions.outputFolder, 'vue-ssr-manifest.json'))
+        )
+        const appPath = path.join(webpackOptions.outputFolder, manifest['main.js'])
+        const createApp = this.requireFromString(this.options.fs.read(appPath), appPath).default
+        const app = await createApp(compilationOptions.context)
+        const appContent = await renderToString(app)
+        const outputFile = this.options.fs.read(path.join(webpackOptions.outputFolder, 'index.html'))
+        return outputFile
+            .replace(
+                '/** sir-vue-initial-state **/',
+                `window.__INITIAL_STATE__ = ${jsToString(compilationOptions.context)}`
+            )
+            .replace('<!--sir-vue-outlet-->', `<div id='app'>${appContent}</div>`)
     }
 
     /**
@@ -358,7 +394,7 @@ export class Renderer {
      * @param outputContent content to send
      */
     async sendFile(req: express.Request, res: express.Response, next: express.NextFunction, outputContent: string) {
-        res.send(outputContent);
+        res.send(outputContent)
     }
 
     /**
@@ -369,7 +405,7 @@ export class Renderer {
      */
     validateCompilationOptions(options: CompilationOptions): WebpackBuilderOptions {
         if (!options.inputFile) {
-            throw new Error(`Invalid input file to compile`);
+            throw new Error(`Invalid input file to compile`)
         }
 
         return {
@@ -378,13 +414,15 @@ export class Renderer {
             entryFiles: this.options.entryFiles,
             webpackOverride: this.options.webpackOverride,
             custom: this.options.webpack,
-            publicPrefix: `${this.options.publicPrefix}/${this.obfuscate(this.getWebpackOutputPath(this.options.outputFolder, options.inputFile))}`,
+            publicPrefix: `${this.options.publicPrefix}/${this.obfuscate(
+                this.getWebpackOutputPath(this.options.outputFolder, options.inputFile)
+            )}`,
             templateFile: this.options.templateFile,
             html: options.rendererOptions.html,
             productionMode: this.options.productionMode,
             projectDirectory: this.options.projectDirectory,
             fs: this.options.fs,
-        } as WebpackBuilderOptions;
+        } as WebpackBuilderOptions
     }
 
     /**
@@ -395,31 +433,28 @@ export class Renderer {
      * @returns output path
      */
     getWebpackOutputPath(outputRoot: string, inputFilePath: string, absolutePath: boolean = false): string {
-        const diff = path.relative(outputRoot, inputFilePath).split(path.sep).filter(i => i !== '..' && i !== '.').join(path.sep);
-        const parsed = path.parse(diff);
+        const diff = path
+            .relative(outputRoot, inputFilePath)
+            .split(path.sep)
+            .filter((i) => i !== '..' && i !== '.')
+            .join(path.sep)
+        const parsed = path.parse(diff)
 
         if (absolutePath) {
-            return path.join(
-                outputRoot,
-                parsed.dir,
-                parsed.name
-            )
+            return path.join(outputRoot, parsed.dir, parsed.name)
         } else {
-            return path.join(
-                parsed.dir,
-                parsed.name
-            );
+            return path.join(parsed.dir, parsed.name)
         }
     }
 
     /**
-     * Takes the incoming renderer options and applies default values to all of the 
+     * Takes the incoming renderer options and applies default values to all of the
      * options that are undefined.
      * @param options given renderer options
      * @returns renderer options with defaults/undefined filled out
      */
     private applyDefaultOptions(options: RendererOptions): ResolvedRendererOptions {
-        const projectDirectory = this.resolveProjectDirectory(options.projectDirectory);
+        const projectDirectory = this.resolveProjectDirectory(options.projectDirectory)
 
         return {
             projectDirectory,
@@ -432,16 +467,24 @@ export class Renderer {
             } as WebpackOverrideOptions | WebpackCustomOptions,
             publicPrefix: options.publicPrefix || '/public/ssr',
             app: options.app,
-            templateFile: options.templateFile ? resolveFile(this.defaultFs, options.templateFile, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/template.html'),
+            templateFile: options.templateFile
+                ? resolveFile(this.defaultFs, options.templateFile, projectDirectory)
+                : resolvePackageFile(this.defaultFs, 'build-files/template.html'),
             entryFiles: {
-                app: options.entryFiles?.app ? resolveFile(this.defaultFs, options.entryFiles.app, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/app.js'),
-                client: options.entryFiles?.client ? resolveFile(this.defaultFs, options.entryFiles.client, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/entry-client.js'),
-                server: options.entryFiles?.server ? resolveFile(this.defaultFs, options.entryFiles.server, projectDirectory) : resolvePackageFile(this.defaultFs, 'build-files/entry-server.js')
+                app: options.entryFiles?.app
+                    ? resolveFile(this.defaultFs, options.entryFiles.app, projectDirectory)
+                    : resolvePackageFile(this.defaultFs, 'build-files/app.js'),
+                client: options.entryFiles?.client
+                    ? resolveFile(this.defaultFs, options.entryFiles.client, projectDirectory)
+                    : resolvePackageFile(this.defaultFs, 'build-files/entry-client.js'),
+                server: options.entryFiles?.server
+                    ? resolveFile(this.defaultFs, options.entryFiles.server, projectDirectory)
+                    : resolvePackageFile(this.defaultFs, 'build-files/entry-server.js'),
             },
             productionMode: options.productionMode || process.env.NODE_ENV || false,
             html: options.html || {},
             fs: options.fs || this.defaultFs,
-        } as ResolvedRendererOptions;
+        } as ResolvedRendererOptions
     }
 
     /**
@@ -455,13 +498,13 @@ export class Renderer {
             throw new Error(`Project directory at path ${pd} does not exist.`)
         }
 
-        return pd || process.cwd();
+        return pd || process.cwd()
     }
 
     /**
      * Takes in a string and creates an encrypted string from it using the
      * project directory as the KEY and the IV.
-     * 
+     *
      * This is not password grade encryption. It is for hiding any directory listings
      * when resolving bundle files.
      * @param text string to obfuscate
@@ -469,11 +512,11 @@ export class Renderer {
      */
     obfuscate(text: string): string {
         const key = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64')
-        const cipher = crypto.createCipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64));
-        let crypted = cipher.update(text, 'utf8', 'hex');
-        crypted += cipher.final('hex');
-        const tag = cipher.getAuthTag();
-        return crypted + ':' + tag.toString('hex');
+        const cipher = crypto.createCipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64))
+        let crypted = cipher.update(text, 'utf8', 'hex')
+        crypted += cipher.final('hex')
+        const tag = cipher.getAuthTag()
+        return crypted + ':' + tag.toString('hex')
     }
 
     /**
@@ -483,88 +526,88 @@ export class Renderer {
      * @returns deobfuscated string
      */
     clarify(text: string): string {
-        const key = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64');
-        const textParts = text.split(':');
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64));
-        decipher.setAuthTag(Buffer.from(textParts[1], 'hex'));
-        let dec = decipher.update(textParts[0], 'hex', 'utf8');
-        dec += decipher.final('utf8');
-        return dec;
+        const key = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64')
+        const textParts = text.split(':')
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64))
+        decipher.setAuthTag(Buffer.from(textParts[1], 'hex'))
+        let dec = decipher.update(textParts[0], 'hex', 'utf8')
+        dec += decipher.final('utf8')
+        return dec
     }
 }
 
 export interface RendererOptions {
-    projectDirectory?: string;
-    viewsFolder?: string;
-    outputFolder?: string;
-    webpackOverride?: boolean;
-    webpack?: WebpackOverrideOptions | WebpackCustomOptions;
-    publicPrefix?: string;
-    app: express.Application;
-    templateFile?: string;
-    entryFiles?: EntryFilesOption;
-    productionMode?: boolean;
-    html?: any;
-    fs?: FSOptions;
+    projectDirectory?: string
+    viewsFolder?: string
+    outputFolder?: string
+    webpackOverride?: boolean
+    webpack?: WebpackOverrideOptions | WebpackCustomOptions
+    publicPrefix?: string
+    app: express.Application
+    templateFile?: string
+    entryFiles?: EntryFilesOption
+    productionMode?: boolean
+    html?: any
+    fs?: FSOptions
 }
 interface ResolvedRendererOptions {
-    projectDirectory: string;
-    viewsFolder: string;
-    outputFolder: string;
-    webpackOverride: boolean;
-    webpack: WebpackOverrideOptions | WebpackCustomOptions;
-    publicPrefix: string;
-    app: express.Application;
-    templateFile: string;
-    entryFiles: EntryFiles;
-    productionMode: boolean;
-    html: any;
-    fs: FSOptions;
+    projectDirectory: string
+    viewsFolder: string
+    outputFolder: string
+    webpackOverride: boolean
+    webpack: WebpackOverrideOptions | WebpackCustomOptions
+    publicPrefix: string
+    app: express.Application
+    templateFile: string
+    entryFiles: EntryFiles
+    productionMode: boolean
+    html: any
+    fs: FSOptions
 }
 
 export interface FSOptions {
-    exists: (path: string) => boolean;
-    read: (path: string) => string;
-    write: (path: string, content: string) => void;
-    mkdir: (path: string) => void;
-    rm: (path: string) => void;
+    exists: (path: string) => boolean
+    read: (path: string) => string
+    write: (path: string, content: string) => void
+    mkdir: (path: string) => void
+    rm: (path: string) => void
 }
 
 export interface RendererOptionsOverride {
-    projectDirectory?: string;
-    viewsFolder?: string;
-    outputFolder?: string;
-    webpackOverride?: boolean;
-    publicPrefix?: string;
-    templateFile?: string;
-    entryFiles?: EntryFiles;
-    html?: any;
+    projectDirectory?: string
+    viewsFolder?: string
+    outputFolder?: string
+    webpackOverride?: boolean
+    publicPrefix?: string
+    templateFile?: string
+    entryFiles?: EntryFiles
+    html?: any
 }
 
 export interface CompilationOptions {
-    rendererOptions: RendererOptions;
-    inputFile: string;
-    context: any;
+    rendererOptions: RendererOptions
+    inputFile: string
+    context: any
 }
 
 export interface WebpackOverrideOptions {
-    client: (options: WebpackBuilderOptions, html: any) => webpackConfiguration;
-    server: (options: WebpackBuilderOptions, html: any) => webpackConfiguration;
+    client: (options: WebpackBuilderOptions, html: any) => webpackConfiguration
+    server: (options: WebpackBuilderOptions, html: any) => webpackConfiguration
 }
 
 export interface WebpackCustomOptions {
-    client: webpackConfiguration;
-    server: webpackConfiguration;
+    client: webpackConfiguration
+    server: webpackConfiguration
 }
 
 export interface EntryFiles {
-    app: string;
-    client: string;
-    server: string;
+    app: string
+    client: string
+    server: string
 }
 
 export interface EntryFilesOption {
-    app?: string;
-    client?: string;
-    server?: string;
+    app?: string
+    client?: string
+    server?: string
 }
