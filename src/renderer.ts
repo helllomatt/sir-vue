@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import * as express from 'express';
 import { Configuration as webpackConfiguration, webpack } from 'webpack';
 import { WebpackBuilder, WebpackBuilderOptions } from './webpack';
@@ -44,7 +45,7 @@ export class Renderer {
 
         this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
+                const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
                 if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'application/javascript');
                     res.send(this.options.fs.read(bundleFilePath));
@@ -57,7 +58,7 @@ export class Renderer {
 
         this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.css`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
+                const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
                 if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'text/css');
                     res.send(this.options.fs.read(bundleFilePath));
@@ -71,7 +72,7 @@ export class Renderer {
         if (!this.options.productionMode) {
             this.options.app.get(`${this.options.publicPrefix}/*/bundle-client.*.(js|css).map`,
                 (req: express.Request, res: express.Response) => {
-                    const bundleFilePath = path.join(this.options.outputFolder, req.path.replace(this.options.publicPrefix, ''));
+                    const bundleFilePath = this.getBundleFilePathFromRequst(req.path);
                     if (this.options.fs.exists(bundleFilePath)) {
                         res.setHeader('Content-Type', 'application/json');
                         res.send(this.options.fs.read(bundleFilePath));
@@ -82,6 +83,20 @@ export class Renderer {
                 },
             );
         }
+    }
+
+    /**
+     * Takes an obfuscated request path and turns it into the path to the
+     * bundle file.
+     * 
+     * e.g. /public/ssr/ansopdfkjnapwoienfklqwjerj-asiudfnq;weornq;wr/bundle.client.js -> /public/ssr/views/Index/bundle.client.js
+     * @param requestPath request path
+     * @returns bundle file path
+     */
+    getBundleFilePathFromRequst(requestPath: string): string {
+        const requestPathParts = requestPath.replace(this.options.publicPrefix, '').split('/');
+        const bundlePath = this.clarify(requestPathParts[1]);
+        return path.join(this.options.outputFolder, bundlePath, requestPathParts.slice(2).join('/'));
     }
 
     /**
@@ -103,9 +118,7 @@ export class Renderer {
      * @returns 
      */
     renderRouteStack(route: any, dir?: string): Promise<any>[] {
-        const promises: Promise<any>[] = [];
-        const re = /res.vue\(([^]+\))/gm;
-        let match = null;
+        let promises: Promise<any>[] = [];
         for (const stack of route.stack) {
             if (stack.route && stack.route.path && stack.route.path.indexOf(this.options.publicPrefix) === 0) {
                 continue;
@@ -115,17 +128,34 @@ export class Renderer {
                 this.renderRouteStack(stack.handle, dir).forEach(promise => promises.push(promise));
             } else if (stack.route) {
                 stack.route.stack.forEach((layer: any) => {
-                    while ((match = re.exec(layer.handle.toString())) !== null) {
-                        if (match.length > 0) {
-                            let renderFunctionString = this.getRenderFunctionString(match[0], dir)
-                            // ur mom could be harmful
-                            // serious: this should only be eval'd code from the developer. if you are malicious
-                            // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
-                            const fn = eval(renderFunctionString);
-                            promises.push(fn());
-                        }
-                    }
+                    promises = [].concat(promises as [], this.evaluateRenderFunction(layer.handle, dir) as []);
                 })
+            } else if (stack.handle) {
+                promises = [].concat(promises as [], this.evaluateRenderFunction(stack.handle, dir) as []);
+            }
+        }
+
+        return promises;
+    }
+
+    /**
+     * Evaluates any found `res.vue` functions and renders them
+     * @param handle express handle function
+     * @param dir replacement for __dirname
+     * @returns
+     */
+    evaluateRenderFunction(handle: any, dir?: string): Promise<any>[] {
+        let promises: Promise<any>[] = [];
+        const re = /res.vue\(([^]+\))/gm;
+        let match = null;
+        while ((match = re.exec(handle.toString())) !== null) {
+            if (match.length > 0) {
+                let renderFunctionString = this.getRenderFunctionString(match[0], dir)
+                // ur mom could be harmful
+                // serious: this should only be eval'd code from the developer. if you are malicious
+                // to yourself it's time to look in the mirror: https://imgflip.com/i/5kpxd2
+                const fn = eval(renderFunctionString);
+                promises.push(fn());
             }
         }
 
@@ -348,7 +378,7 @@ export class Renderer {
             entryFiles: this.options.entryFiles,
             webpackOverride: this.options.webpackOverride,
             custom: this.options.webpack,
-            publicPrefix: `${this.options.publicPrefix}/${this.getWebpackOutputPath(this.options.outputFolder, options.inputFile)}`,
+            publicPrefix: `${this.options.publicPrefix}/${this.obfuscate(this.getWebpackOutputPath(this.options.outputFolder, options.inputFile))}`,
             templateFile: this.options.templateFile,
             html: options.rendererOptions.html,
             productionMode: this.options.productionMode,
@@ -426,6 +456,40 @@ export class Renderer {
         }
 
         return pd || process.cwd();
+    }
+
+    /**
+     * Takes in a string and creates an encrypted string from it using the
+     * project directory as the KEY and the IV.
+     * 
+     * This is not password grade encryption. It is for hiding any directory listings
+     * when resolving bundle files.
+     * @param text string to obfuscate
+     * @returns obfuscated string
+     */
+    obfuscate(text: string): string {
+        const key = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64')
+        const cipher = crypto.createCipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64));
+        let crypted = cipher.update(text, 'utf8', 'hex');
+        crypted += cipher.final('hex');
+        const tag = cipher.getAuthTag();
+        return crypted + ':' + tag.toString('hex');
+    }
+
+    /**
+     * Takes in an obfuscated string and returns the original string
+     * (opposite of the obfuscate function)
+     * @param text string to deobfuscate
+     * @returns deobfuscated string
+     */
+    clarify(text: string): string {
+        const key = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64');
+        const textParts = text.split(':');
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key.substring(0, 32), key.substring(32, 64));
+        decipher.setAuthTag(Buffer.from(textParts[1], 'hex'));
+        let dec = decipher.update(textParts[0], 'hex', 'utf8');
+        dec += decipher.final('utf8');
+        return dec;
     }
 }
 
