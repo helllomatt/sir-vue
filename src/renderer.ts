@@ -7,17 +7,13 @@ import { WebpackBuilder, WebpackBuilderOptions } from './webpack'
 import { renderToString } from '@vue/server-renderer'
 const jsToString = require('js-to-string')
 import { resolveFolder, resolveFile, resolvePackageFile } from './dir'
+const Cryptr = require('cryptr')
 
 export class Renderer {
     options: ResolvedRendererOptions
     defaultFs: FSOptions
     moduleCache: { [key: string]: any } = {}
-    obfuscateKey: {
-        [key: string]: string,
-    } = {
-        key: '',
-        iv: ''
-    }
+    crypt: any
 
     /**
      * Creates a new instance of the renderer and applies any default
@@ -39,10 +35,7 @@ export class Renderer {
 
         this.options = this.applyDefaultOptions(options)
         const obfuscateHash = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64')
-        this.obfuscateKey = {
-            key: obfuscateHash.substring(0, 32),
-            iv: obfuscateHash.substring(32, 64)
-        }
+        this.crypt = new Cryptr(obfuscateHash)
 
         this.inject()
     }
@@ -522,11 +515,7 @@ export class Renderer {
      * @returns obfuscated string
      */
     obfuscate(text: string): string {
-        const cipher = crypto.createCipheriv('aes-256-gcm', this.obfuscateKey.key, this.obfuscateKey.iv)
-        let crypted = cipher.update(text, 'utf8', 'hex')
-        crypted += cipher.final('hex')
-        const tag = cipher.getAuthTag()
-        return crypted + ':' + tag.toString('hex')
+        return this.crypt.encrypt(text)
     }
 
     /**
@@ -536,12 +525,7 @@ export class Renderer {
      * @returns deobfuscated string
      */
     clarify(text: string): string {
-        const textParts = text.split(':')
-        const decipher = crypto.createDecipheriv('aes-256-gcm', this.obfuscateKey.key, this.obfuscateKey.iv)
-        decipher.setAuthTag(Buffer.from(textParts[1], 'hex'))
-        let dec = decipher.update(textParts[0], 'hex', 'utf8')
-        dec += decipher.final('utf8')
-        return dec
+        return this.crypt.decrypt(text)
     }
 }
 
