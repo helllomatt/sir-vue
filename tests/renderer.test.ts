@@ -663,6 +663,7 @@ describe('renderer', () => {
             app,
             viewsFolder: 'tests/views',
             outputFolder: 'tests/dist',
+            obfuscationKey: '12345678901234567890123456789012',
         }
 
         const r = new Renderer(options)
@@ -670,5 +671,42 @@ describe('renderer', () => {
         const obfuscated = r.obfuscate('Hello world!')
         expect(obfuscated).to.not.equal('Hello world!')
         expect(r.clarify(obfuscated)).to.equal('Hello world!')
+    })
+
+    it('should encrypt/decrypt a string over two separate renderers', () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            obfuscationKey: '12345678901234567890123456789012',
+        }
+
+        const r1 = new Renderer(options)
+
+        const obfuscated = r1.obfuscate('Hello world!')
+        expect(obfuscated).to.not.equal('Hello world!')
+
+        const r2 = new Renderer(options)
+        expect(r2.clarify(obfuscated)).to.equal('Hello world!')
+    })
+
+    it('should encrypt and fail to decrypt a string over two separate renderers with different keys', () => {
+        const options: RendererOptions = {
+            app,
+            viewsFolder: 'tests/views',
+            outputFolder: 'tests/dist',
+            obfuscationKey: '12345678901234567890123456789012',
+        }
+
+        const r1 = new Renderer(options)
+
+        const obfuscated = r1.obfuscate('Hello world!')
+        expect(obfuscated).to.not.equal('Hello world!')
+
+        const r2 = new Renderer({
+            ...options,
+            obfuscationKey: '',
+        })
+        expect(() => r2.clarify(obfuscated)).to.throw(Error)
     })
 })

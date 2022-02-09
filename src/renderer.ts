@@ -34,7 +34,7 @@ export class Renderer {
         }
 
         this.options = this.applyDefaultOptions(options)
-        const obfuscateHash = crypto.createHash('sha256').update(String(this.options.projectDirectory)).digest('base64')
+        const obfuscateHash = crypto.createHash('sha256').update(String(this.options.obfuscationKey)).digest('base64');
         this.crypt = new Cryptr(obfuscateHash)
 
         this.inject()
@@ -464,6 +464,7 @@ export class Renderer {
             projectDirectory,
             viewsFolder: resolveFolder(this.defaultFs, options.viewsFolder || 'views', projectDirectory),
             outputFolder: resolveFolder(this.defaultFs, options.outputFolder || 'dist', projectDirectory, true),
+            obfuscationKey: options.obfuscationKey || 'sir-vue-renderer',
             webpackOverride: options.webpackOverride || false,
             webpack: {
                 client: options.webpack?.client || {},
@@ -533,6 +534,7 @@ export interface RendererOptions {
     projectDirectory?: string
     viewsFolder?: string
     outputFolder?: string
+    obfuscationKey?: string
     webpackOverride?: boolean
     webpack?: WebpackOverrideOptions | WebpackCustomOptions
     publicPrefix?: string
@@ -547,6 +549,7 @@ interface ResolvedRendererOptions {
     projectDirectory: string
     viewsFolder: string
     outputFolder: string
+    obfuscationKey: string
     webpackOverride: boolean
     webpack: WebpackOverrideOptions | WebpackCustomOptions
     publicPrefix: string

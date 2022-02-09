@@ -1,6 +1,6 @@
 {
     "name": "sir-vue",
-    "version": "1.7.4",
+    "version": "1.7.5",
     "description": "Customizable SSR rendering library for Vue and Express",
     "homepage": "https://github.com/helllomatt/sir-vue",
     "bugs": {
