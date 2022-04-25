@@ -1,6 +1,8 @@
 import * as path from 'path'
 import { FSOptions } from './renderer'
 
+const cache: any = {};
+
 /**
  * Finds/validates a folder path. If a relative path was given, it will be looked for
  * within the current project directory variable.
@@ -18,9 +20,13 @@ export const resolveFolder = (
         throw new Error(`Cannot resolve an undefined folder.`)
     }
 
+    if (cache[folder]) {
+        return cache[folder];
+    } else 
     // check if the given "folder" is actually a path
     if (fsOverride.exists(folder)) {
-        return path.resolve(folder)
+        cache[folder] = path.resolve(folder);
+        return cache[folder]
     } else {
         if (!rootFolder) {
             throw new Error(
@@ -33,6 +39,7 @@ export const resolveFolder = (
         if (!fsOverride.exists(fp)) {
             if (createIfNotExists) {
                 fsOverride.mkdir(fp)
+                cache[folder] = path.resolve(fp);
             } else {
                 throw new Error(`Folder at path ${fp} does not exist.`)
             }
