@@ -14,6 +14,11 @@ export class Renderer {
     defaultFs: FSOptions
     moduleCache: { [key: string]: any } = {}
     crypt: any
+    cryptCache: {
+        [key: string]: {
+            [key: string]: string
+        }
+    } = {}
 
     /**
      * Creates a new instance of the renderer and applies any default
@@ -36,6 +41,10 @@ export class Renderer {
         this.options = this.applyDefaultOptions(options)
         const obfuscateHash = crypto.createHash('sha256').update(String(this.options.obfuscationKey)).digest('base64');
         this.crypt = new Cryptr(obfuscateHash)
+        this.cryptCache = {
+            obfuscated: {},
+            clarified: {}
+        };
 
         this.inject()
     }
@@ -50,7 +59,7 @@ export class Renderer {
         this.options.app.get(
             `${this.options.publicPrefix}/*/bundle-client.*.js`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
+                const bundleFilePath = this.getBundleFilePathFromRequest(req.path)
                 if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'application/javascript')
                     res.send(this.options.fs.read(bundleFilePath))
@@ -64,7 +73,7 @@ export class Renderer {
         this.options.app.get(
             `${this.options.publicPrefix}/*/bundle-client.*.css`,
             (req: express.Request, res: express.Response) => {
-                const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
+                const bundleFilePath = this.getBundleFilePathFromRequest(req.path)
                 if (this.options.fs.exists(bundleFilePath)) {
                     res.setHeader('Content-Type', 'text/css')
                     res.send(this.options.fs.read(bundleFilePath))
@@ -79,7 +88,7 @@ export class Renderer {
             this.options.app.get(
                 `${this.options.publicPrefix}/*/bundle-client.*.(js|css).map`,
                 (req: express.Request, res: express.Response) => {
-                    const bundleFilePath = this.getBundleFilePathFromRequst(req.path)
+                    const bundleFilePath = this.getBundleFilePathFromRequest(req.path)
                     if (this.options.fs.exists(bundleFilePath)) {
                         res.setHeader('Content-Type', 'application/json')
                         res.send(this.options.fs.read(bundleFilePath))
@@ -102,7 +111,7 @@ export class Renderer {
      * @param requestPath request path
      * @returns bundle file path
      */
-    getBundleFilePathFromRequst(requestPath: string): string {
+    getBundleFilePathFromRequest(requestPath: string): string {
         const requestPathParts = requestPath.replace(this.options.publicPrefix, '').split('/')
         const bundlePath = this.clarify(requestPathParts[1])
         return path.join(this.options.outputFolder, bundlePath, requestPathParts.slice(2).join('/'))
@@ -191,15 +200,32 @@ export class Renderer {
         const params = fnText.match(/\(null, null, \(\) => {}, ([^)]+)\)/)
         let basicParams = null
         if (params) {
-            const paramString = params[0].substring(1, params[0].length - 1)
-            const paramArray = paramString.split(',')
-            const paramArrayClean = paramArray.map((param) => param.replace(/['"]+/g, ''))
-            const paramArrayClean2 = paramArrayClean.map((param) => param.trim())
-            if (paramArrayClean2.length > 4) {
-                paramArrayClean2.splice(4)
+            const paramString = params[0].substring(1, params[0].length - 1);
+            const paramArray = paramString.split(',').map((param) => param.trim());
+            const paramArrayClean = paramArray.map((param) => param.replace(/['"]+/g, ''));
+            if (paramArrayClean.length > 4) {
+                paramArrayClean.splice(4);
+
+                // we have to get the other parameters from the `res.vue` call and then turn them into an array string,
+                // then evaluate that string so we can get the 'options' parameter object which has the renderer options
+                // so we can pass that to the prerender function
+                let temp = []
+                try {
+                    temp = eval(`[${paramArray.slice(4).join(',')}]`).slice(1);
+                } catch (e: any) {
+                    if (e.message.indexOf('is not defined') > -1) {
+                        temp = eval(`[${paramArray.slice(5).join(',')}]`);
+                    }
+                }
+
+                if (temp.length > 0) {
+                    paramArrayClean.push('{}', JSON.stringify(temp[0]))
+                } else {
+                    paramArrayClean.push('{}', '{}');
+                }
             }
-            paramArrayClean2[paramArrayClean2.length - 1] = `'${paramArrayClean2[paramArrayClean2.length - 1]}'`
-            basicParams = paramArrayClean2.join(', ')
+            paramArrayClean[3] = `'${paramArrayClean[3]}'`;
+            basicParams = paramArrayClean.join(', ');
         }
 
         return `async () => await this.templateEngine(${basicParams})`
@@ -516,7 +542,12 @@ export class Renderer {
      * @returns obfuscated string
      */
     obfuscate(text: string): string {
-        return this.crypt.encrypt(text)
+        if (!this.cryptCache.obfuscated[text]) {
+            let encrypted = this.crypt.encrypt(text);
+            this.cryptCache.obfuscated[text] = encrypted;
+            this.cryptCache.clarified[encrypted] = text;
+        }
+        return this.cryptCache.obfuscated[text];
     }
 
     /**
@@ -526,7 +557,12 @@ export class Renderer {
      * @returns deobfuscated string
      */
     clarify(text: string): string {
-        return this.crypt.decrypt(text)
+        if (!this.cryptCache.clarified[text]) {
+            let decrypted = this.crypt.decrypt(text);
+            this.cryptCache.clarified[text] = decrypted;
+            this.cryptCache.obfuscated[decrypted] = text;
+        }
+        return this.cryptCache.clarified[text];
     }
 }
 
